@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>接続監視システム | 受験者</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0f1117;
+      --surface: #1a1d27;
+      --border:  #2a2d3a;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --green:   #22c55e;
+      --red:     #ef4444;
+      --red-dk:  #991b1b;
+      --blue:    #3b82f6;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ===== SCREENS ===== */
+    .screen { display: none; min-height: 100vh; }
+    .screen.active { display: flex; }
+
+    /* ===== SCREEN 1: セットアップ ===== */
+    #screen-input {
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2.75rem 2.5rem;
+      width: 100%;
+      max-width: 440px;
+      text-align: center;
+    }
+
+    .card-logo { font-size: 2.8rem; margin-bottom: 0.9rem; }
+
+    .card h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      line-height: 1.45;
+      margin-bottom: 0.6rem;
+    }
+
+    .card-subtitle {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-bottom: 2rem;
+    }
+
+    .form-group { text-align: left; margin-bottom: 1.1rem; }
+
+    .form-group label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      margin-bottom: 0.45rem;
+    }
+
+    .form-group input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.82rem 1rem;
+      border-radius: 8px;
+      font-size: 1.05rem;
+      text-align: center;
+      letter-spacing: 0.1em;
+      font-weight: 600;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+
+    .form-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1.25rem 0;
+    }
+
+    .error-msg {
+      color: var(--red);
+      font-size: 0.78rem;
+      min-height: 1.2em;
+      margin-bottom: 0.4rem;
+      text-align: left;
+    }
+
+    .btn-green {
+      width: 100%;
+      background: var(--green);
+      color: #000;
+      border: none;
+      padding: 0.92rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-green:hover  { background: #16a34a; }
+    .btn-green:active { transform: scale(0.98); }
+
+    .notice-box {
+      background: #1c1a0e;
+      border: 1px solid #92400e;
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      margin-top: 1.4rem;
+      font-size: 0.78rem;
+      color: #fbbf24;
+      line-height: 1.65;
+      text-align: left;
+    }
+
+    /* ===== SCREEN 2: 監視中 ===== */
+    #screen-monitor { flex-direction: column; }
+
+    .mon-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.85rem 1.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .mon-header-left { display: flex; align-items: center; gap: 0.65rem; }
+    .mon-header-left h2 { font-size: 0.93rem; font-weight: 700; }
+
+    .pill {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 0.25rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .mon-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 1.5rem;
+    }
+
+    .status-ring {
+      width: 155px;
+      height: 155px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3.8rem;
+      border: 4px solid transparent;
+      transition: all 0.4s ease;
+      margin-bottom: 1.6rem;
+    }
+    .status-ring.safe {
+      background: #052e16;
+      border-color: var(--green);
+      box-shadow: 0 0 40px rgba(34,197,94,0.18);
+    }
+    .status-ring.alert {
+      background: #450a0a;
+      border-color: var(--red);
+      animation: pulse-ring 1s ease-in-out infinite;
+    }
+    .status-ring.idle {
+      background: var(--surface);
+      border-color: var(--border);
+    }
+
+    @keyframes pulse-ring {
+      0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+      70%  { box-shadow: 0 0 0 22px rgba(239,68,68,0); }
+      100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+    }
+
+    .status-label {
+      font-size: 1.9rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.55rem;
+    }
+    .status-label.safe  { color: var(--green); }
+    .status-label.alert { color: var(--red); }
+    .status-label.idle  { color: var(--muted); }
+
+    .status-sub { font-size: 0.87rem; color: var(--muted); }
+
+    .last-check-tag {
+      margin-top: 2rem;
+      font-size: 0.73rem;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.38rem 1.1rem;
+      border-radius: 999px;
+    }
+
+    .alert-hist {
+      margin-top: 1.3rem;
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.4);
+      border-radius: 8px;
+      padding: 0.55rem 1.1rem;
+      font-size: 0.78rem;
+      color: #fca5a5;
+      display: none;
+    }
+
+    /* ===== ALERT OVERLAY ===== */
+    #alert-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+      background: var(--red);
+      animation: flash-bg 1.3s ease-in-out infinite alternate;
+    }
+    #alert-overlay.active { display: flex; }
+
+    @keyframes flash-bg {
+      from { background: #ef4444; }
+      to   { background: var(--red-dk); }
+    }
+
+    .ov-icon {
+      font-size: 6.5rem;
+      animation: bounce 0.5s ease-in-out infinite alternate;
+      filter: drop-shadow(0 0 22px rgba(255,255,255,0.35));
+    }
+    @keyframes bounce {
+      from { transform: translateY(0); }
+      to   { transform: translateY(-13px); }
+    }
+
+    .ov-title {
+      font-size: 2.8rem;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 2px 14px rgba(0,0,0,0.2);
+      margin-top: 0.9rem;
+    }
+
+    .ov-sub {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.9);
+      margin-top: 0.55rem;
+    }
+
+    .ov-detail {
+      margin-top: 1.8rem;
+      background: rgba(0,0,0,0.2);
+      border-radius: 10px;
+      padding: 0.9rem 2rem;
+      font-size: 0.92rem;
+      color: rgba(255,255,255,0.88);
+      line-height: 2;
+    }
+
+    .btn-dismiss {
+      margin-top: 2.2rem;
+      padding: 0.85rem 2.4rem;
+      background: rgba(0,0,0,0.25);
+      border: 2px solid rgba(255,255,255,0.5);
+      color: #fff;
+      font-size: 0.97rem;
+      font-weight: 700;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-dismiss:hover { background: rgba(0,0,0,0.42); }
+
+    @media (max-width: 480px) {
+      .ov-title { font-size: 1.9rem; }
+      .ov-sub   { font-size: 1rem; }
+      .status-ring { width: 120px; height: 120px; font-size: 3rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     SCREEN 1: 入力
+     ============================================================ -->
+<div id="screen-input" class="screen active">
+  <div class="card">
+    <div class="card-logo">🔒</div>
+    <h1>インターネット接続<br>監視システム</h1>
+    <p class="card-subtitle" id="card-subtitle">
+      監督者から受け取った「セッションコード」と<br>
+      あなたの「学籍番号」を入力してください。
+    </p>
+
+    <!-- URLパラメータでセッションコードが指定された場合は非表示 -->
+    <div class="form-group" id="topic-group">
+      <label>セッションコード</label>
+      <input
+        type="text"
+        id="topic-input"
+        placeholder="例：exam-20260318-abc"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </div>
+
+    <!-- URLパラメータあり時に表示するコードバッジ -->
+    <div id="topic-badge" style="display:none; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:0.6rem 1rem; margin-bottom:1rem; font-size:0.82rem; color:var(--muted); text-align:center;">
+      セッション：<strong id="topic-badge-val" style="color:var(--text);"></strong>
+    </div>
+
+    <hr class="form-divider" id="form-divider" />
+
+    <div class="form-group">
+      <label>学籍番号</label>
+      <input
+        type="text"
+        id="student-id-input"
+        placeholder="例：2024001"
+        autocomplete="off"
+        spellcheck="false"
+        maxlength="20"
+      />
+    </div>
+
+    <div class="error-msg" id="input-error"></div>
+
+    <button class="btn-green" onclick="beginMonitoring()">▶ 監視を開始する</button>
+
+    <div class="notice-box">
+      ⚠️ 開始後はすみやかにインターネット接続を切断してください。<br>
+      テスト中に接続が検知された場合、この画面にアラートが表示され、監督者に通知されます。
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCREEN 2: 監視中
+     ============================================================ -->
+<div id="screen-monitor" class="screen">
+  <div class="mon-header">
+    <div class="mon-header-left">
+      <span>🔒</span>
+      <h2>接続監視システム</h2>
+      <span class="pill" id="pill-id">--</span>
+    </div>
+    <span style="font-size:0.73rem; color:var(--muted);" id="pill-session">--</span>
+  </div>
+
+  <div class="mon-body">
+    <div class="status-ring idle" id="status-ring">🔒</div>
+    <div class="status-label idle" id="status-label">確認中...</div>
+    <div class="status-sub"       id="status-sub">接続チェックを実行しています</div>
+    <div class="last-check-tag"   id="last-check">最終確認：--</div>
+    <div class="alert-hist"       id="alert-hist">
+      ⚠️ このセッションで <span id="alert-count-disp">0</span> 回の接続を検知しました
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     アラートオーバーレイ
+     ============================================================ -->
+<div id="alert-overlay">
+  <div class="ov-icon">🚨</div>
+  <div class="ov-title">インターネット接続を検知</div>
+  <div class="ov-sub">⚠️ 監督者に申告してください</div>
+  <div class="ov-detail">
+    検知時刻：<strong id="ov-time">--</strong><br>
+    学籍番号：<strong id="ov-sid">--</strong><br>
+    検知回数：<strong id="ov-count">--</strong> 回目
+  </div>
+  <button class="btn-dismiss" onclick="dismissAlert()">確認しました</button>
+</div>
+
+<script>
+  // ── 定数 ──────────────────────────────────────────────────────────
+  const NTFY_BASE        = 'https://ntfy.sh';
+  const CHECK_INTERVAL   = 5000;  // 接続チェック間隔（ミリ秒）
+  const CONNECTIVITY_URL = 'https://www.google.com/favicon.ico';
+
+  // ── 状態 ──────────────────────────────────────────────────────────
+  let topic         = '';
+  let studentId     = '';
+  let monitorTimer  = null;
+  let alertCount    = 0;
+  let isAlertActive = false;
+
+  // URL パラメータからトピックを処理
+  // ?topic=xxx がある場合：セッションコード入力欄を非表示にして学籍番号だけ入力させる
+  const params = new URLSearchParams(location.search);
+  const presetTopic = params.get('topic');
+  if (presetTopic) {
+    document.getElementById('topic-input').value = presetTopic;
+    // セッションコード入力欄を隠す
+    document.getElementById('topic-group').style.display = 'none';
+    document.getElementById('form-divider').style.display = 'none';
+    // バッジ表示
+    document.getElementById('topic-badge').style.display = 'block';
+    document.getElementById('topic-badge-val').textContent = presetTopic;
+    // 説明文を変更
+    document.getElementById('card-subtitle').innerHTML =
+      'あなたの「学籍番号」を入力して<br>監視を開始してください。';
+  }
+
+  // ── 監視開始 ──────────────────────────────────────────────────────
+  function beginMonitoring() {
+    const topicVal = document.getElementById('topic-input').value.trim();
+    const sidVal   = document.getElementById('student-id-input').value.trim();
+    const err      = document.getElementById('input-error');
+
+    if (!topicVal) {
+      err.textContent = 'セッションコードを入力してください';
+      return;
+    }
+    if (!sidVal) {
+      err.textContent = '学籍番号を入力してください';
+      return;
+    }
+    if (!/^[a-zA-Z0-9\-_]+$/.test(sidVal)) {
+      err.textContent = '学籍番号は半角英数字で入力してください';
+      return;
+    }
+
+    topic     = topicVal;
+    studentId = sidVal;
+    err.textContent = '';
+
+    // 画面を切り替え
+    document.getElementById('pill-id').textContent      = '学籍番号：' + studentId;
+    document.getElementById('pill-session').textContent = 'セッション：' + topic;
+    document.getElementById('ov-sid').textContent       = studentId;
+    switchScreen('screen-monitor');
+
+    // ntfy.sh に登録イベントを送信
+    sendEvent('REGISTER', '監視を開始しました');
+
+    // 監視開始
+    checkConnection();
+    monitorTimer = setInterval(checkConnection, CHECK_INTERVAL);
+  }
+
+  // ── 接続チェック ──────────────────────────────────────────────────
+  async function checkConnection() {
+    try {
+      await fetch(CONNECTIVITY_URL + '?t=' + Date.now(), {
+        mode:   'no-cors',
+        cache:  'no-store',
+        signal: AbortSignal.timeout(4000)
+      });
+      onInternetDetected();
+    } catch (_) {
+      onOffline();
+    }
+    document.getElementById('last-check').textContent =
+      '最終確認：' + new Date().toLocaleTimeString('ja-JP');
+  }
+
+  // ── インターネット検知 ────────────────────────────────────────────
+  function onInternetDetected() {
+    if (isAlertActive) return; // 重複防止
+    isAlertActive = true;
+    alertCount++;
+
+    const now = new Date();
+
+    // ntfy.sh に通知を送信
+    sendEvent('ALERT', '接続を検知しました（' + alertCount + '回目）');
+
+    // ステータスUI
+    setStatusUI('alert', '⚠️', '接続検知！', 'インターネット接続を検出しました');
+
+    // 履歴バッジ
+    document.getElementById('alert-hist').style.display = 'block';
+    document.getElementById('alert-count-disp').textContent = alertCount;
+
+    // オーバーレイ
+    document.getElementById('ov-time').textContent  = now.toLocaleString('ja-JP');
+    document.getElementById('ov-count').textContent = alertCount;
+    document.getElementById('alert-overlay').classList.add('active');
+  }
+
+  // ── オフライン（正常） ────────────────────────────────────────────
+  function onOffline() {
+    if (isAlertActive) return;
+    setStatusUI('safe', '✅', '安全', 'インターネット未接続（正常）');
+  }
+
+  // ── アラート閉じる ────────────────────────────────────────────────
+  function dismissAlert() {
+    isAlertActive = false;
+    document.getElementById('alert-overlay').classList.remove('active');
+    sendEvent('DISMISS', 'アラートを確認しました');
+    setStatusUI('safe', '✅', '安全', 'インターネット未接続（正常）');
+  }
+
+  // ── ntfy.sh 送信 ──────────────────────────────────────────────────
+  // メッセージ形式: "REGISTER|ALERT|DISMISS:学籍番号:説明"
+  function sendEvent(type, message) {
+    const body = `${type}:${studentId}:${message}`;
+    fetch(`${NTFY_BASE}/${topic}`, {
+      method: 'POST',
+      body:   body,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Title':      '接続監視システム',
+        'X-Tags':       type === 'ALERT' ? 'rotating_light' : 'white_check_mark',
+        'X-Priority':   type === 'ALERT' ? '5' : '3'
+      }
+    }).catch(() => {}); // 送信失敗しても監視は継続
+  }
+
+  // ── UI ヘルパー ───────────────────────────────────────────────────
+  function setStatusUI(type, icon, label, sub) {
+    document.getElementById('status-ring').className   = 'status-ring ' + type;
+    document.getElementById('status-ring').textContent = icon;
+    document.getElementById('status-label').className  = 'status-label ' + type;
+    document.getElementById('status-label').textContent = label;
+    document.getElementById('status-sub').textContent  = sub;
+  }
+
+  function switchScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  document.getElementById('student-id-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') beginMonitoring();
+  });
+</script>
+</body>
+</html>
