@@ -135,9 +135,9 @@
   const q = new URLSearchParams(location.search);
   if (q.get('topic')) {
     document.getElementById('topic-input').value = q.get('topic');
-    document.getElementById('topic-container').style.display = 'none';
     document.getElementById('topic-badge').style.display = 'block';
     document.getElementById('topic-badge-val').textContent = q.get('topic');
+    document.getElementById('topic-container').style.display = 'none';
   }
 
   function beginMonitoring() {
@@ -168,7 +168,7 @@
   async function checkConnection() {
     let online = false;
     try {
-      await fetch(CONNECT_CHECK_URL + '?t=' + Date.now(), { mode:'no-cors', cache:'no-store', signal:AbortSignal.timeout(2500) });
+      await fetch(CONNECT_CHECK_URL + '?t=' + Date.now(), { mode:'no-cors', cache:'no-store', signal:AbortSignal.timeout(2000) });
       online = true;
     } catch(e) { online = false; }
 
@@ -178,7 +178,6 @@
     } else {
       onOffline();
     }
-    document.getElementById('last-check').textContent = '最終確認: ' + new Date().toLocaleTimeString();
   }
 
   async function pollAdmin() {
@@ -190,7 +189,8 @@
         const msg = JSON.parse(line);
         if (msg.event === 'message') {
             lastMessageId = msg.id;
-            if (msg.message.includes('FINISH_ALL') && msg.time >= myStartTime) {
+            // 終了信号の検知
+            if (msg.message.includes('FINISH_ALL') && msg.time >= (myStartTime - 10)) {
                 finishExam();
             }
         }
@@ -213,14 +213,14 @@
 
   function onOffline() {
     if (isAlertActive) return;
-    updateUI('safe', '✅', '安全', 'オフラインを確認。');
+    updateUI('safe', '✅', '安全', 'オフラインを確認。そのまま試験を続けてください');
+    document.getElementById('last-check').textContent = '最終確認: ' + new Date().toLocaleTimeString();
   }
 
   function dismissAlert() {
     isAlertActive = false;
     document.getElementById('alert-overlay').style.display = 'none';
     sendEvent('DISMISS', '了解');
-    updateUI('safe', '✅', '安全', 'オフラインを確認。');
   }
 
   function finishExam() {
@@ -246,7 +246,7 @@
     lbl.textContent = label;
     document.getElementById('status-sub').textContent = sub;
     ldot.className = 'lamp-dot ' + type;
-    ltxt.textContent = (type==='alert') ? '⚠️ 警告中' : 'ONLINE (SAFE)';
+    ltxt.textContent = (type==='alert') ? '⚠️ 警告中' : '監視中 (SAFE)';
   }
 
   function switchScreen(id) {

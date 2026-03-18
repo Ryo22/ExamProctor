@@ -33,9 +33,9 @@
     .btn-red   { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: var(--red); padding: 5px 10px; font-size: 0.75rem; }
 
     #screen-setup { align-items: center; padding: 3rem 1.5rem; }
-    .setup-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; width: 100%; max-width: 700px; }
+    .setup-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; width: 100%; max-width: 750px; }
     .topic-list { display: flex; flex-direction: column; gap: 10px; margin: 1.5rem 0; }
-    .topic-item { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; align-items: center; justify-content: space-between; }
+    .topic-item { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 15px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 15px; }
 
     .dash-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
     .top-scroll { background: var(--bg); padding: 1rem 1.5rem; overflow-x: auto; display: flex; gap: 1rem; border-bottom: 1px solid var(--border); }
@@ -44,14 +44,14 @@
         min-width: 220px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 15px; cursor: pointer; transition: all 0.2s;
     }
     .exam-card:hover { border-color: var(--blue); }
-    .exam-card.active { border-color: var(--blue); background: rgba(59,130,246,0.1); box-shadow: 0 0 15px rgba(59,130,246,0.2); }
+    .exam-card.active { border-color: var(--blue); background: rgba(59,130,246,0.1); }
 
     .dash-main { display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; padding: 1.5rem; max-width: 1400px; margin: 0 auto; width: 100%; }
     .card-v { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; }
     .card-v h2 { font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 1rem; }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    td, th { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }
+    td, th { padding: 12px 10px; border-bottom: 1px solid var(--border); text-align: left; }
     tr.row-alert { background: rgba(239, 68, 68, 0.05); }
 
     .status-pill { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; }
@@ -78,14 +78,14 @@
     <h2>📅 試験セッション設定</h2>
     <div class="topic-list" id="topic-list-ui"></div>
     <div style="display: flex; gap: 10px;">
-      <input type="text" id="new-topic-input" placeholder="試験名 (例: session-1)" style="flex:1; background:var(--bg); border:1px solid var(--border); color:white; padding:10px; border-radius:8px;"/>
+      <input type="text" id="new-topic-input" placeholder="セッションコード (例: math-session-1)" style="flex:1; background:var(--bg); border:1px solid var(--border); color:white; padding:10px; border-radius:8px;"/>
       <button class="btn btn-blue" style="width:auto; padding:0 20px;" onclick="addTopic()">追加</button>
     </div>
     <div style="margin-top: 1.5rem;">
-      <label style="font-size:0.7rem; color:var(--muted); font-weight:800;">共通名簿 (学籍番号,氏名)</label>
-      <textarea id="setup-roster" style="width:100%; height:100px; background:var(--bg); border:1px solid var(--border); color:white; padding:10px; border-radius:8px; margin-top:5px;" placeholder="2024001,田中太郎"></textarea>
+      <label style="font-size:0.75rem; color:var(--muted); font-weight:800;">共通名簿 (学籍番号,氏名)</label>
+      <textarea id="setup-roster" style="width:100%; height:100px; background:var(--bg); border:1px solid var(--border); color:white; padding:10px; border-radius:8px; margin-top:5px; font-family:monospace;" placeholder="2024001,田中太郎"></textarea>
     </div>
-    <button class="btn btn-green" style="margin-top:1.5rem;" onclick="startDashboard()">通知を許可して監視開始</button>
+    <button class="btn btn-green" style="margin-top:1.5rem;" onclick="startDashboard()">監視を開始する</button>
   </div>
 </div>
 
@@ -122,11 +122,11 @@
     </div>
     <div class="dash-right">
       <div class="card-v">
-        <h2>🚨 アクティブアラート</h2>
-        <div class="alert-scroll" id="active-alerts-list"></div>
+        <h2>🚨 アラート</h2>
+        <div class="alert-scroll" id="active-alerts-list" style="max-height: 400px; overflow-y: auto;"></div>
       </div>
       <div class="card-v">
-        <h2>📝 ログ</h2>
+        <h2>📝 監視ログ</h2>
         <div id="log-box" style="font-size:0.7rem; height:300px; overflow-y:auto; line-height:1.6;"></div>
       </div>
     </div>
@@ -158,18 +158,19 @@
 
   function getClientUrl(t) {
     const u = new URL(location.href);
-    const p = u.pathname.split('admin.html')[0] + 'client.html';
-    return `${u.origin}${p}?topic=${encodeURIComponent(t)}`;
+    // パスの最後を取得し、client.html に置き換え
+    const basePath = u.pathname.substring(0, u.pathname.lastIndexOf('/') + 1);
+    return `${u.origin}${basePath}client.html?topic=${encodeURIComponent(t)}`;
   }
 
   function renderTopicList() {
     document.getElementById('topic-list-ui').innerHTML = activeTopics.map(t => `
         <div class="topic-item">
-            <div>
-                <div style="font-weight:800;">${t}</div>
-                <div style="font-size:0.6rem; color:var(--blue);">${getClientUrl(t)}</div>
+            <div style="overflow:hidden;">
+                <div style="font-weight:800; font-size:1.1rem; color:var(--blue);">${t}</div>
+                <div style="font-size:0.65rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${getClientUrl(t)}</div>
             </div>
-            <button class="btn btn-ghost" onclick="navigator.clipboard.writeText('${getClientUrl(t)}');alert('コピーしました')">URLコピー</button>
+            <button class="btn btn-ghost" onclick="navigator.clipboard.writeText('${getClientUrl(t)}');alert('URLをコピーしました')">URLコピー</button>
             <button class="btn btn-red" onclick="activeTopics=activeTopics.filter(x=>x!=='${t}');renderTopicList()">削除</button>
         </div>
     `).join('');
@@ -221,15 +222,14 @@
         studentStates[key].status = 'alert';
         studentStates[key].alertCount++;
         studentStates[key].lastAlert = ts;
-        notifyOS(`🚨 接続検知: ${sid}`, `${topic} にて通信を検知しました`);
-        addLog(topic, sid, 'ネット接続検知!', ts);
+        notifyOS(`🚨 接続検知: ${sid}`, `${topic} で通信がありました`);
+        addLog(topic, sid, 'ネット接続!!', ts);
     } else if (type === 'FOCUS_LOST') {
         studentStates[key].status = 'focus-lost';
-        notifyOS(`👁️ 画面離脱: ${sid}`, `${topic} の受験生が画面（Excel等）を切り替えました`);
-        addLog(topic, sid, '画面から離脱（裏操作）', ts);
+        addLog(topic, sid, '画面切り替え（離脱）', ts);
     } else if (type === 'FOCUS_GAINED') {
         studentStates[key].status = 'safe';
-        addLog(topic, sid, '画面に復帰', ts);
+        addLog(topic, sid, '画面復帰', ts);
     } else if (type === 'REGISTER') {
         studentStates[key].status = 'safe';
         addLog(topic, sid, '監視開始', ts);
@@ -239,48 +239,53 @@
   }
 
   function notifyOS(title, body) {
-    if (Notification.permission === 'granted') {
-        new Notification(title, { body });
-    }
+    if (Notification.permission === 'granted') new Notification(title, { body });
   }
 
   function updateUI() {
     const all = Object.values(studentStates);
     const filtered = filterTopic ? all.filter(s => s.topic === filterTopic) : all;
 
-    let cards = `<div class="exam-card ${!filterTopic?'active':''}" onclick="filterTopic=null;updateUI()"><b>全体表示</b><br><small>${all.length}名 接続中</small></div>`;
+    // 試験カード
+    let cards = `<div class="exam-card ${!filterTopic?'active':''}" onclick="filterTopic=null;updateUI()"><b>全体</b><br><small>${all.length}名 稼働中</small></div>`;
     activeTopics.forEach(t => {
         const count = all.filter(s=>s.topic===t).length;
-        const alerts = all.filter(s=>s.topic===t && s.status==='alert').length;
         cards += `<div class="exam-card ${filterTopic===t?'active':''}" onclick="filterTopic='${t}';updateUI()">
             <div style="font-weight:800;">${t}</div>
-            <small>${count}名 ${alerts > 0 ? `<b style="color:var(--red);">(${alerts}🚨)</b>` : ''}</small>
+            <small>${count}名</small>
             <button class="btn btn-red" style="width:100%; font-size:0.6rem; padding:4px; margin-top:8px;" onclick="event.stopPropagation();terminateExam('${t}')">一括終了</button>
         </div>`;
     });
     document.getElementById('exam-cards-container').innerHTML = cards;
 
+    // テーブル
     document.getElementById('main-tbody').innerHTML = filtered.sort((a,b)=>a.sid.localeCompare(b.sid, undefined, {numeric:true})).map(s => `
         <tr class="${s.status==='alert'?'row-alert':''}">
-            <td style="font-size:0.7rem; color:var(--muted);">${s.topic}</td>
+            <td style="font-size:0.75rem; color:var(--muted);">${s.topic}</td>
             <td><b>${s.sid}</b></td>
             <td>${rosterData[s.sid] || '(未登録)'}</td>
             <td><span class="status-pill ${s.status}">${s.status.toUpperCase()}</span></td>
             <td>${s.alertCount}</td>
-            <td><button class="btn btn-ghost" onclick="studentStates['${s.topic}:${s.sid}'].status='safe';updateUI()">クリア</button></td>
+            <td><button class="btn btn-ghost" onclick="studentStates['${s.topic}:${s.sid}'].status='safe';updateUI()">解除</button></td>
         </tr>
     `).join('');
 
+    // アラートリスト
     document.getElementById('active-alerts-list').innerHTML = all.filter(s=>s.status==='alert').map(s=>`
-        <div style="background:rgba(239,68,68,0.1); border:1px solid var(--red); padding:10px; border-radius:8px; margin-bottom:8px;">
-            <b>${s.sid}</b> (${s.topic})<br><small>最終検知: ${s.lastAlert.toLocaleTimeString()}</small>
+        <div style="background:rgba(239,68,68,0.1); border:1px solid var(--red); padding:10px; border-radius:8px; margin-bottom:10px;">
+            <b>${s.sid}</b> (${s.topic})<br><small>${s.lastAlert.toLocaleTimeString()}</small>
         </div>
     `).join('');
   }
 
   async function terminateExam(topic) {
-    if (confirm(`${topic} を終了させますか？`)) {
-        await fetch(`${NTFY_BASE}/${topic}`, { method:'POST', body:'FINISH_ALL' });
+    if (confirm(`${topic} を終了させますか？\n全受験者の画面が終了メッセージに切り替わります。`)) {
+        await fetch(`${NTFY_BASE}/${topic}`, { 
+            method: 'POST', 
+            body: 'FINISH_ALL_SIGNAL',
+            headers: { 'X-Priority': '5' } 
+        });
+        alert(`${topic} に終了信号を送信しました。`);
     }
   }
 
@@ -290,7 +295,7 @@
 
   function addLog(t, s, a, ts) {
     const log = document.getElementById('log-box');
-    log.innerHTML = `<div><span style="color:var(--muted)">[${ts.toLocaleTimeString()}]</span> <b>${s}</b> (${t}) → ${a}</div>` + log.innerHTML;
+    log.innerHTML = `<div><span style="color:var(--muted)">[${ts.toLocaleTimeString()}]</span> ${s} → ${a}</div>` + log.innerHTML;
   }
 
   function switchScreen(id) {
