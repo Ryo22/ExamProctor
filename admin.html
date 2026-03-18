@@ -238,6 +238,7 @@
     .status-pill.alert { background: var(--red); color: white; }
     .status-pill.safe  { background: rgba(34,197,94,0.15); color: var(--green); }
     .status-pill.absent { background: var(--bg); color: var(--muted); }
+    .status-pill.unregistered { background: #451a03; color: #fbbf24; border: 1px solid #92400e; }
 
     /* Toast */
     #toast-wrap { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
@@ -584,23 +585,29 @@
         return a.sid.localeCompare(b.sid, undefined, { numeric:true });
     });
 
-    document.getElementById('main-tbody').innerHTML = tableRows.map(s => `
-        <tr class="${s.status==='alert'?'row-alert':''} ${s.status==='absent'?'row-absent':''}">
-            <td style="font-family:monospace; font-size:0.7rem;">${s.topic}</td>
-            <td><strong>${s.sid}</strong></td>
-            <td>${rosterData[s.sid] || '---'}</td>
-            <td><span class="status-pill ${s.status}">${s.status.toUpperCase()}</span></td>
-            <td>${s.alertCount}</td>
-            <td>${s.lastAlert ? s.lastAlert.toLocaleTimeString() : '---'}</td>
-            <td>
-                <div style="display:flex; gap:4px;">
-                    ${s.status==='alert' ? `<button class="btn btn-red" style="padding:4px 8px; font-size:0.7rem;" onclick="confirmAlert('${s.topic}','${s.sid}')">解除</button>` : '---'}
-                    ${s.topic !== '-' && !finishedTopics.has(s.topic) ? `<button class="btn btn-ghost" style="padding:4px 8px; font-size:0.7rem;" onclick="terminateExam('${s.topic}')">終</button>` : ''}
-                    ${finishedTopics.has(s.topic) ? '<span style="color:var(--muted); font-size:0.7rem;">終了済</span>' : ''}
-                </div>
-            </td>
-        </tr>
-    `).join('');
+    document.getElementById('main-tbody').innerHTML = tableRows.map(s => {
+        const isUnregistered = (s.status !== 'absent') && !rosterData[s.sid];
+        const statusClass = isUnregistered ? 'unregistered' : s.status;
+        const statusLabel = isUnregistered ? '⚠️ 未登録' : s.status.toUpperCase();
+        
+        return `
+            <tr class="${s.status==='alert'?'row-alert':''} ${s.status==='absent'?'row-absent':''} ${isUnregistered ? 'row-alert' : ''}">
+                <td style="font-family:monospace; font-size:0.7rem;">${s.topic}</td>
+                <td><strong style="${isUnregistered ? 'color:var(--orange);' : ''}">${s.sid}</strong></td>
+                <td>${rosterData[s.sid] || '<span style="color:var(--muted); font-size:0.75rem;">(名簿に未掲載)</span>'}</td>
+                <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
+                <td>${s.alertCount}</td>
+                <td>${s.lastAlert ? s.lastAlert.toLocaleTimeString() : '---'}</td>
+                <td>
+                    <div style="display:flex; gap:4px;">
+                        ${s.status==='alert' ? `<button class="btn btn-red" style="padding:4px 8px; font-size:0.7rem;" onclick="confirmAlert('${s.topic}','${s.sid}')">解除</button>` : '---'}
+                        ${s.topic !== '-' && !finishedTopics.has(s.topic) ? `<button class="btn btn-ghost" style="padding:4px 8px; font-size:0.7rem;" onclick="terminateExam('${s.topic}')">終</button>` : ''}
+                        ${finishedTopics.has(s.topic) ? '<span style="color:var(--muted); font-size:0.7rem;">終了済</span>' : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
   }
 
   function confirmAlert(topic, sid) {
