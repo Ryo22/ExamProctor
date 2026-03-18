@@ -237,84 +237,111 @@
       display: none;
     }
 
-    /* ===== ALERT OVERLAY ===== */
+    /* ===== STATUS LAMP (Floating) ===== */
+    #status-lamp {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(15, 17, 23, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      pointer-events: none;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .lamp-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+      box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    }
+    .lamp-dot.safe  { background: var(--green); box-shadow: 0 0 10px var(--green); }
+    .lamp-dot.alert { background: var(--red);   box-shadow: 0 0 12px var(--red); animation: pulse-red 1s infinite; }
+    .lamp-text { font-size: 0.68rem; font-weight: 700; color: var(--text); letter-spacing: 0.02em; }
+
+    @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* ===== ALERT MODAL ===== */
     #alert-overlay {
       display: none;
       position: fixed;
       inset: 0;
-      z-index: 9999;
-      flex-direction: column;
+      z-index: 11000;
       align-items: center;
       justify-content: center;
-      text-align: center;
-      padding: 2rem;
-      background: var(--red);
-      animation: flash-bg 1.3s ease-in-out infinite alternate;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
     }
     #alert-overlay.active { display: flex; }
 
-    @keyframes flash-bg {
-      from { background: #ef4444; }
-      to   { background: var(--red-dk); }
+    .alert-modal {
+      background: var(--surface);
+      border: 2px solid var(--red);
+      border-radius: 20px;
+      width: 90%;
+      max-width: 420px;
+      padding: 2.5rem 2rem;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      animation: modalIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
+    @keyframes modalIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
-    .ov-icon {
-      font-size: 6.5rem;
-      animation: bounce 0.5s ease-in-out infinite alternate;
-      filter: drop-shadow(0 0 22px rgba(255,255,255,0.35));
-    }
-    @keyframes bounce {
-      from { transform: translateY(0); }
-      to   { transform: translateY(-13px); }
-    }
-
-    .ov-title {
-      font-size: 2.8rem;
-      font-weight: 900;
-      color: #fff;
-      text-shadow: 0 2px 14px rgba(0,0,0,0.2);
-      margin-top: 0.9rem;
-    }
-
-    .ov-sub {
-      font-size: 1.2rem;
-      font-weight: 600;
-      color: rgba(255,255,255,0.9);
-      margin-top: 0.55rem;
+    .ov-icon { font-size: 3.5rem; margin-bottom: 1rem; }
+    .ov-title { font-size: 1.4rem; font-weight: 800; color: var(--red); margin-bottom: 0.5rem; }
+    .ov-sub { font-size: 0.88rem; color: var(--text); line-height: 1.6; margin-bottom: 1.5rem; }
+    
+    .ov-warning-en {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.3rem;
+      font-style: italic;
     }
 
     .ov-detail {
-      margin-top: 1.8rem;
-      background: rgba(0,0,0,0.2);
-      border-radius: 10px;
-      padding: 0.9rem 2rem;
-      font-size: 0.92rem;
-      color: rgba(255,255,255,0.88);
-      line-height: 2;
+        margin: 1.5rem 0;
+        padding: 1rem;
+        background: var(--bg);
+        border-radius: 12px;
+        font-size: 0.82rem;
+        color: var(--muted);
+        text-align: left;
     }
+    .ov-detail strong { color: var(--text); }
 
     .btn-dismiss {
-      margin-top: 2.2rem;
-      padding: 0.85rem 2.4rem;
-      background: rgba(0,0,0,0.25);
-      border: 2px solid rgba(255,255,255,0.5);
-      color: #fff;
-      font-size: 0.97rem;
+      width: 100%;
+      padding: 0.9rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 0.9rem;
       font-weight: 700;
-      border-radius: 999px;
+      border-radius: 10px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s;
     }
-    .btn-dismiss:hover { background: rgba(0,0,0,0.42); }
+    .btn-dismiss:hover { background: var(--bg); border-color: var(--muted); }
 
     @media (max-width: 480px) {
-      .ov-title { font-size: 1.9rem; }
-      .ov-sub   { font-size: 1rem; }
       .status-ring { width: 120px; height: 120px; font-size: 3rem; }
     }
   </style>
 </head>
 <body>
+
+<!-- ステータスランプ -->
+<div id="status-lamp" style="display:none;">
+    <div class="lamp-dot" id="lamp-dot"></div>
+    <div class="lamp-text" id="lamp-text">STANDBY</div>
+</div>
 
 <!-- ============================================================
      SCREEN 1: 入力
@@ -364,8 +391,9 @@
     <button class="btn-green" onclick="beginMonitoring()">▶ 監視を開始する</button>
 
     <div class="notice-box">
-      ⚠️ 開始後はすみやかにインターネット接続を切断してください。<br>
-      テスト中に接続が検知された場合、この画面にアラートが表示され、監督者に通知されます。
+      ⚠️ 開始ボタンを押すと、一度サーバーに登録されます（接続が必要です）。<br>
+      その後、すみやかに使用デバイスのインターネット通信を切断してください。<br>
+      テスト中に接続が検知された場合、監督者に通知されます。
     </div>
   </div>
 </div>
@@ -395,18 +423,23 @@
 </div>
 
 <!-- ============================================================
-     アラートオーバーレイ
+     アラートオーバーレイ（モーダル形式）
      ============================================================ -->
 <div id="alert-overlay">
-  <div class="ov-icon">🚨</div>
-  <div class="ov-title">インターネット接続を検知</div>
-  <div class="ov-sub">⚠️ 監督者に申告してください</div>
-  <div class="ov-detail">
-    検知時刻：<strong id="ov-time">--</strong><br>
-    学籍番号：<strong id="ov-sid">--</strong><br>
-    検知回数：<strong id="ov-count">--</strong> 回目
+  <div class="alert-modal">
+    <div class="ov-icon">⚠️</div>
+    <div class="ov-title">接続を検知しました</div>
+    <div class="ov-sub">
+        直ちにネットワークを切断してください<br>
+        <div class="ov-warning-en">Please disconnect the network immediately</div>
+    </div>
+    <div class="ov-detail">
+        検知時刻： <strong id="ov-time">--</strong><br>
+        学籍番号： <strong id="ov-sid">--</strong><br>
+        検知回数： <strong id="ov-count">--</strong> 回目
+    </div>
+    <button class="btn-dismiss" onclick="dismissAlert()">OK / 閉じる</button>
   </div>
-  <button class="btn-dismiss" onclick="dismissAlert()">確認しました</button>
 </div>
 
 <script>
@@ -423,18 +456,14 @@
   let isAlertActive = false;
 
   // URL パラメータからトピックを処理
-  // ?topic=xxx がある場合：セッションコード入力欄を非表示にして学籍番号だけ入力させる
   const params = new URLSearchParams(location.search);
   const presetTopic = params.get('topic');
   if (presetTopic) {
     document.getElementById('topic-input').value = presetTopic;
-    // セッションコード入力欄を隠す
     document.getElementById('topic-group').style.display = 'none';
     document.getElementById('form-divider').style.display = 'none';
-    // バッジ表示
     document.getElementById('topic-badge').style.display = 'block';
     document.getElementById('topic-badge-val').textContent = presetTopic;
-    // 説明文を変更
     document.getElementById('card-subtitle').innerHTML =
       'あなたの「学籍番号」を入力して<br>監視を開始してください。';
   }
@@ -462,10 +491,13 @@
     studentId = sidVal;
     err.textContent = '';
 
-    // 画面を切り替え
     document.getElementById('pill-id').textContent      = '学籍番号：' + studentId;
     document.getElementById('pill-session').textContent = 'セッション：' + topic;
     document.getElementById('ov-sid').textContent       = studentId;
+    
+    // ランプ表示
+    document.getElementById('status-lamp').style.display = 'flex';
+    
     switchScreen('screen-monitor');
 
     // ntfy.sh に登録イベントを送信
@@ -494,13 +526,11 @@
 
   // ── インターネット検知 ────────────────────────────────────────────
   function onInternetDetected() {
-    if (isAlertActive) return; // 重複防止
+    if (isAlertActive) return; 
     isAlertActive = true;
     alertCount++;
 
     const now = new Date();
-
-    // ntfy.sh に通知を送信
     sendEvent('ALERT', '接続を検知しました（' + alertCount + '回目）');
 
     // ステータスUI
@@ -531,7 +561,6 @@
   }
 
   // ── ntfy.sh 送信 ──────────────────────────────────────────────────
-  // メッセージ形式: "REGISTER|ALERT|DISMISS:学籍番号:説明"
   function sendEvent(type, message) {
     const body = `${type}:${studentId}:${message}`;
     fetch(`${NTFY_BASE}/${topic}`, {
@@ -543,7 +572,7 @@
         'X-Tags':       type === 'ALERT' ? 'rotating_light' : 'white_check_mark',
         'X-Priority':   type === 'ALERT' ? '5' : '3'
       }
-    }).catch(() => {}); // 送信失敗しても監視は継続
+    }).catch(() => {});
   }
 
   // ── UI ヘルパー ───────────────────────────────────────────────────
@@ -553,6 +582,16 @@
     document.getElementById('status-label').className  = 'status-label ' + type;
     document.getElementById('status-label').textContent = label;
     document.getElementById('status-sub').textContent  = sub;
+    
+    // ランプも更新
+    const lampDot  = document.getElementById('lamp-dot');
+    const lampText = document.getElementById('lamp-text');
+    lampDot.className = 'lamp-dot ' + type;
+    if (type === 'alert') {
+        lampText.innerHTML = '⚠️ ネットワークを切断してください / Please disconnect the network';
+    } else {
+        lampText.textContent = 'ONLINE (SAFE)';
+    }
   }
 
   function switchScreen(id) {

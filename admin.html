@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>接続監視システム | 管理画面</title>
+  <title>接続監視システム | 多機能管理画面</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -17,6 +18,7 @@
       --red:     #ef4444;
       --blue:    #3b82f6;
       --orange:  #f97316;
+      --indigo:  #6366f1;
     }
 
     body {
@@ -24,6 +26,7 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
+      overflow-x: hidden;
     }
 
     .screen { display: none; min-height: 100vh; }
@@ -46,10 +49,10 @@
       width: 100%;
       max-width: 400px;
       text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
     .login-card .logo { font-size: 2.8rem; margin-bottom: 0.9rem; }
-    .login-card h1 { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; }
-    .login-card p  { font-size: 0.82rem; color: var(--muted); margin-bottom: 2rem; line-height: 1.6; }
+    .login-card h1 { font-size: 1.2rem; font-weight: 700; margin-bottom: 2rem; }
 
     .form-group { text-align: left; margin-bottom: 1.1rem; }
     .form-group label {
@@ -66,9 +69,8 @@
       border-radius: 8px;
       font-size: 1rem;
       transition: border-color 0.2s, box-shadow 0.2s;
-      font-family: inherit;
     }
-    .form-group input:focus, .form-group textarea:focus {
+    .form-group input:focus {
       outline: none; border-color: var(--blue);
       box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
     }
@@ -86,14 +88,6 @@
     .btn-ghost:hover { border-color: var(--text); color: var(--text); }
     .btn-red   { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4);
                  color: var(--red); padding: 0.45rem 0.9rem; font-size: 0.8rem; font-weight: 700; }
-    .btn-red:hover   { background: rgba(239,68,68,0.3); }
-
-    .pw-hint {
-      margin-top: 1.25rem;
-      background: #1c1a0e; border: 1px solid #92400e;
-      border-radius: 8px; padding: 0.75rem 1rem;
-      font-size: 0.75rem; color: #fbbf24; line-height: 1.6; text-align: left;
-    }
 
     /* ======================================================
        SCREEN 2: セットアップ
@@ -102,104 +96,52 @@
       align-items: flex-start;
       justify-content: center;
       padding: 2rem 1.5rem;
+      flex-direction: column;
+      max-width: 800px;
+      margin: 0 auto;
     }
 
     .setup-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 2.25rem 2.25rem;
+      padding: 2.25rem;
       width: 100%;
-      max-width: 580px;
+      margin-bottom: 1.5rem;
     }
 
-    .setup-card h1 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.4rem; }
-    .setup-card .setup-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 1.75rem; line-height: 1.6; }
+    .setup-card h1 { font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
+    
+    .topic-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 1.5rem;
+    }
+    .topic-item {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 15px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
 
-    .section-divider {
-      border: none; border-top: 1px solid var(--border);
-      margin: 1.5rem 0;
-    }
-    .section-label {
-      font-size: 0.72rem; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.85rem;
-      display: flex; align-items: center; justify-content: space-between;
-    }
+    .topic-item-info { display: flex; flex-direction: column; }
+    .topic-item-id { font-size: 0.9rem; font-weight: 700; color: var(--blue); }
+    .topic-item-roster { font-size: 0.75rem; color: var(--muted); }
 
-    /* セッションコード行 */
-    .code-row { display: flex; gap: 0.5rem; }
-    .code-row input { flex: 1; }
-    .btn-gen {
-      background: var(--bg); border: 1px solid var(--border);
-      color: var(--muted); padding: 0 0.9rem;
-      border-radius: 8px; font-size: 0.8rem; cursor: pointer;
-      white-space: nowrap; transition: border-color 0.15s, color 0.15s;
-    }
-    .btn-gen:hover { border-color: var(--blue); color: var(--blue); }
-
-    /* 受験者URL */
-    .share-box {
-      background: var(--bg); border: 1px solid var(--border);
-      border-radius: 8px; padding: 0.65rem 0.85rem;
-      margin-top: 0.6rem; display: none;
-    }
-    .share-box-label { font-size: 0.68rem; color: var(--muted); margin-bottom: 0.3rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
-    .share-row { display: flex; gap: 0.5rem; align-items: center; }
-    .share-url-input {
-      flex: 1; background: transparent; border: none;
-      color: var(--blue); font-size: 0.78rem; font-family: monospace; padding: 0;
-    }
-    .share-url-input:focus { outline: none; }
-    .copy-btn {
-      background: none; border: 1px solid var(--border); color: var(--muted);
-      font-size: 0.72rem; padding: 0.22rem 0.55rem; border-radius: 4px;
-      cursor: pointer; white-space: nowrap; transition: all 0.15s;
-    }
-    .copy-btn:hover { border-color: var(--green); color: var(--green); }
-
-    /* ロスターインポート */
-    .import-tabs { display: flex; gap: 0.4rem; margin-bottom: 0.85rem; }
-    .tab-btn {
-      background: var(--bg); border: 1px solid var(--border);
-      color: var(--muted); padding: 0.4rem 0.9rem;
-      border-radius: 6px; font-size: 0.78rem; cursor: pointer;
-      transition: all 0.15s; font-weight: 600;
-    }
-    .tab-btn.active { background: rgba(59,130,246,0.15); border-color: var(--blue); color: var(--blue); }
-
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
-
-    .form-group textarea {
-      resize: vertical;
-      min-height: 120px;
-      font-size: 0.82rem;
-      font-family: 'Consolas', 'Menlo', monospace;
-      line-height: 1.6;
+    .add-topic-area {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        margin-top: 10px;
     }
 
-    .file-drop {
-      border: 2px dashed var(--border); border-radius: 8px;
-      padding: 2rem 1rem; text-align: center; cursor: pointer;
-      transition: border-color 0.2s;
-    }
-    .file-drop:hover { border-color: var(--blue); }
-    .file-drop input[type=file] { display: none; }
-    .file-drop p { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
-
-    .roster-preview {
-      margin-top: 0.75rem;
-      font-size: 0.78rem;
-      color: var(--green);
-      background: #052e16;
-      border: 1px solid rgba(34,197,94,0.3);
-      border-radius: 6px;
-      padding: 0.55rem 0.85rem;
-      display: none;
-      line-height: 1.5;
-    }
-
-    .btn-row { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+    .section-divider { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
 
     /* ======================================================
        SCREEN 3: ダッシュボード
@@ -208,691 +150,495 @@
 
     .dash-header {
       background: var(--surface); border-bottom: 1px solid var(--border);
-      padding: 0.85rem 1.75rem;
+      padding: 1rem 1.75rem;
       display: flex; align-items: center; justify-content: space-between;
-      flex-wrap: wrap; gap: 0.5rem;
+      position: sticky; top: 0; z-index: 100;
     }
-    .dash-header-l { display: flex; align-items: center; gap: 0.6rem; }
-    .dash-header-l h1 { font-size: 0.93rem; font-weight: 700; }
-    .badge-admin {
-      background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.35);
-      color: var(--blue); font-size: 0.68rem; font-weight: 700;
-      padding: 0.18rem 0.55rem; border-radius: 4px;
+    .dash-header-l { display: flex; align-items: center; gap: 10px; }
+    .dash-header-l h1 { font-size: 1rem; font-weight: 700; }
+    .badge-multi {
+        background: var(--indigo);
+        color: white;
+        font-size: 0.65rem;
+        font-weight: 900;
+        padding: 2px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
     }
-    .dash-header-r { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-    .pill-session {
-      font-size: 0.75rem; color: var(--muted);
-      background: var(--bg); border: 1px solid var(--border);
-      padding: 0.26rem 0.75rem; border-radius: 999px;
-    }
-    .live-dot {
-      display: inline-block; width: 7px; height: 7px;
-      background: var(--green); border-radius: 50%;
-      animation: blink 1.4s ease-in-out infinite;
-    }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
-    /* Stats */
     .stats-bar {
       background: var(--surface); border-bottom: 1px solid var(--border);
-      padding: 0.7rem 1.75rem;
-      display: flex; gap: 1.75rem; flex-wrap: wrap; align-items: center;
+      padding: 1rem 1.75rem;
+      display: flex; gap: 2rem; overflow-x: auto;
     }
-    .stat { display: flex; flex-direction: column; gap: 0.1rem; }
-    .stat-n { font-size: 1.45rem; font-weight: 800; line-height: 1; }
-    .stat-l { font-size: 0.67rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
-    .stat.c-total .stat-n { color: var(--text); }
-    .stat.c-safe  .stat-n { color: var(--green); }
-    .stat.c-alert .stat-n { color: var(--red); }
-    .stat.c-absent .stat-n { color: var(--orange); }
+    .stat { display: flex; flex-direction: column; min-width: 80px; }
+    .stat-n { font-size: 1.6rem; font-weight: 800; }
+    .stat-l { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
 
-    /* Content */
-    .dash-content { flex: 1; padding: 1.2rem 1.75rem; overflow-y: auto; max-width: 1100px; margin: 0 auto; width: 100%; }
-
-    .section-hd {
-      font-size: 0.72rem; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.09em;
-      margin-bottom: 0.7rem;
+    .dash-main {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        gap: 1.5rem;
+        padding: 1.5rem 1.75rem;
+        max-width: 1400px;
+        margin: 0 auto;
+        width: 100%;
     }
 
-    /* Active alerts */
-    #alert-section { display: none; margin-bottom: 1.4rem; }
-    .alert-cards { display: flex; flex-direction: column; gap: 0.6rem; }
+    .dash-left { display: flex; flex-direction: column; gap: 1.5rem; }
+    .dash-right { display: flex; flex-direction: column; gap: 1.5rem; }
+
+    .card-v {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+    }
+    .card-v h2 { font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+
+    /* Charts */
+    #chart-container { height: 260px; width: 100%; }
+
+    /* Alert Cards */
+    .alert-scroll { display: flex; flex-direction: column; gap: 10px; max-height: 500px; overflow-y: auto; }
     .alert-card {
-      background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.35);
-      border-radius: 10px; padding: 0.9rem 1.2rem;
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 0.75rem; flex-wrap: wrap;
-      animation: fadeIn 0.3s ease;
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 10px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        animation: alertIn 0.3s ease;
     }
-    @keyframes fadeIn { from{opacity:0;transform:translateY(-5px)} to{opacity:1;transform:translateY(0)} }
-    .alert-card-l { display: flex; align-items: center; gap: 0.7rem; }
-    .ac-icon { font-size: 1.7rem; }
-    .ac-id   { font-size: 1.05rem; font-weight: 800; color: var(--red); }
-    .ac-name { font-size: 0.78rem; color: var(--muted); margin-top: 0.1rem; }
-    .ac-meta { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+    @keyframes alertIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .ac-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .ac-info { display: flex; flex-direction: column; }
+    .ac-id { font-size: 1rem; font-weight: 800; color: var(--red); }
+    .ac-topic { font-size: 0.65rem; color: var(--muted); font-family: monospace; }
+    .ac-name { font-size: 0.8rem; color: var(--text); }
+    .ac-time { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
 
     /* Table */
-    .table-section { margin-bottom: 1.4rem; }
-    .table-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.7rem; }
-    .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-
-    table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
-    thead tr { background: var(--bg); border-bottom: 1px solid var(--border); }
-    th { padding: 0.6rem 1rem; text-align: left; font-size: 0.68rem; font-weight: 700;
-         color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
-    td { padding: 0.7rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { background: var(--bg); color: var(--muted); font-size: 0.65rem; text-transform: uppercase; text-align: left; padding: 12px 15px; border-bottom: 1px solid var(--border); }
+    td { padding: 12px 15px; border-bottom: 1px solid var(--border); }
     tr:last-child td { border-bottom: none; }
     tr.row-alert { background: rgba(239,68,68,0.05); }
-    tr.row-absent { background: rgba(249,115,22,0.04); }
-    tr:hover td   { background: rgba(255,255,255,0.02); }
-
-    .s-badge {
-      display: inline-flex; align-items: center; gap: 0.3rem;
-      padding: 0.22rem 0.65rem; border-radius: 999px; font-size: 0.73rem; font-weight: 700;
+    tr.row-absent { opacity: 0.5; }
+    
+    .status-pill {
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
     }
-    .s-badge.alert    { background:#450a0a; color:var(--red);    border:1px solid rgba(239,68,68,0.4); animation:pulse-b 1.2s ease-in-out infinite; }
-    .s-badge.safe     { background:#052e16; color:var(--green);  border:1px solid rgba(34,197,94,0.35); }
-    .s-badge.absent   { background:rgba(249,115,22,0.12); color:var(--orange); border:1px solid rgba(249,115,22,0.35); }
-    .s-badge.monitoring { background:var(--bg); color:var(--muted); border:1px solid var(--border); }
-    @keyframes pulse-b { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 8px rgba(239,68,68,0.4)} }
-
-    .cnt { font-weight: 700; font-size: 0.97rem; }
-    .cnt.red { color: var(--red); }
-    .empty-td { text-align:center; color:var(--muted); font-size:0.8rem; padding:2.5rem !important; }
-
-    /* Log */
-    .log-section { margin-bottom: 1.4rem; }
-    .log-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.7rem; }
-    #log-box {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 0.5rem;
-      max-height: 200px; overflow-y: auto;
-      font-family: 'Consolas','Menlo',monospace; font-size: 0.77rem;
-    }
-    #log-box::-webkit-scrollbar { width: 5px; }
-    #log-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-    .log-row {
-      display: grid; grid-template-columns: 155px 80px 1fr;
-      gap: 0.45rem; padding: 0.32rem 0.6rem; border-radius: 4px;
-    }
-    .log-row:hover { background: rgba(255,255,255,0.03); }
-    .log-row.l-alert   { border-left: 3px solid var(--red); }
-    .log-row.l-reg     { border-left: 3px solid var(--green); }
-    .log-row.l-dismiss { border-left: 3px solid var(--muted); }
-    .lt { color:var(--muted); white-space:nowrap; }
-    .lk { font-weight:700; white-space:nowrap; }
-    .lk.alert   { color:var(--red); }
-    .lk.reg     { color:var(--green); }
-    .lk.dismiss { color:var(--muted); }
-    .lm { word-break:break-all; }
-    .log-empty { text-align:center; color:var(--muted); padding:1.5rem; }
+    .status-pill.alert { background: var(--red); color: white; }
+    .status-pill.safe  { background: rgba(34,197,94,0.15); color: var(--green); }
+    .status-pill.absent { background: var(--bg); color: var(--muted); }
 
     /* Toast */
-    #toast-wrap { position:fixed; top:1rem; right:1rem; z-index:9000; display:flex; flex-direction:column; gap:0.55rem; pointer-events:none; }
+    #toast-wrap { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
     .toast {
-      background:#450a0a; border:1px solid rgba(239,68,68,0.55);
-      border-radius:10px; padding:0.85rem 1.15rem; min-width:270px;
-      pointer-events:auto; box-shadow:0 4px 20px rgba(0,0,0,0.5);
-      animation:slideIn 0.3s ease;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--red);
+        padding: 15px;
+        border-radius: 8px;
+        color: var(--text);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        min-width: 280px;
+        animation: slideUp 0.3s ease;
     }
-    @keyframes slideIn { from{transform:translateX(110%);opacity:0} to{transform:translateX(0);opacity:1} }
-    .toast-title { font-size:0.82rem; font-weight:800; color:var(--red); margin-bottom:0.2rem; }
-    .toast-body  { font-size:0.78rem; color:var(--text); line-height:1.45; }
-    .toast-time  { font-size:0.68rem; color:var(--muted); margin-top:0.25rem; }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    @media (max-width: 1000px) {
+        .dash-main { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
 
-<!-- =====================================================
-     SCREEN 1: ログイン
-     ===================================================== -->
+<!-- ログイン画面 -->
 <div id="screen-login" class="screen active">
   <div class="login-card">
     <div class="logo">🔐</div>
-    <h1>管理画面ログイン</h1>
-    <p>管理者パスワードを入力してください</p>
-
+    <h1>マルチ監視ログイン</h1>
     <div class="form-group">
-      <label>パスワード</label>
-      <input type="password" id="pw-input" placeholder="パスワードを入力" autocomplete="off" />
+      <label>ADMIN PASSWORD</label>
+      <input type="password" id="pw-input" placeholder="パスワードを入力" />
     </div>
-    <div class="error-msg" id="pw-error"></div>
-    <button class="btn btn-blue" onclick="checkPassword()">ログイン</button>
-
-    <div class="pw-hint">
-      ⚠️ デフォルトのパスワードは <code style="background:rgba(255,255,255,0.1);padding:0.1em 0.4em;border-radius:3px;">admin</code> です。<br>
-      このHTMLファイルの先頭にある <code style="background:rgba(255,255,255,0.1);padding:0.1em 0.4em;border-radius:3px;">ADMIN_PASSWORD</code> を変更してご使用ください。
-    </div>
+    <div id="pw-error" class="error-msg"></div>
+    <button class="btn btn-blue" onclick="checkPassword()">認証して開始</button>
   </div>
 </div>
 
-<!-- =====================================================
-     SCREEN 2: セットアップ
-     ===================================================== -->
+<!-- セットアップ画面 -->
 <div id="screen-setup" class="screen">
   <div class="setup-card">
-    <h1>👨‍💼 試験セッション設定</h1>
-    <p class="setup-sub">
-      セッションコードを決めてください。受験者への配布方法は2通りあります。<br>
-      <strong style="color:var(--text);">① コードを口頭・テキストで伝える</strong>（受験者がコード＋学籍番号を入力）<br>
-      <strong style="color:var(--text);">② URLを配布する</strong>（受験者は学籍番号の入力だけで済む）
+    <h1><span style="font-size: 1.5rem;">📚</span> 試験セッションの追加</h1>
+    <p style="color:var(--muted); font-size:0.85rem; margin-bottom:1.5rem;">
+        監視したいセッションコードを1つ以上追加してください。複数の試験を同時に一覧監視できます。
     </p>
 
-    <!-- セッションコード -->
-    <div class="section-label">セッションコード</div>
-    <div class="code-row">
-      <input type="text" id="topic-input" placeholder="例：exam-20260318-abc" autocomplete="off" spellcheck="false" oninput="onTopicChange()" />
-      <button class="btn-gen" onclick="generateCode()">🎲 自動生成</button>
+    <div class="topic-list" id="topic-list-ui">
+        <!-- JSで追加 -->
     </div>
 
-    <!-- セッションコード / URL 共有 -->
-    <div class="share-box" id="share-box">
-      <div class="share-box-label">① コードを口頭・テキストで伝える場合</div>
-      <div class="share-row">
-        <input class="share-url-input" type="text" id="share-code" readonly />
-        <button class="copy-btn" onclick="copyCode()">コピー</button>
-      </div>
-      <div class="share-box-label" style="margin-top:0.65rem;">② URLを配布してワンクリックで開かせる場合（学籍番号のみ入力で済む）</div>
-      <div class="share-row">
-        <input class="share-url-input" type="text" id="share-url" readonly />
-        <button class="copy-btn" onclick="copyUrl()">コピー</button>
-      </div>
+    <div class="add-topic-area">
+        <input type="text" id="new-topic-input" placeholder="セッションコードを入力" />
+        <button class="btn btn-blue" style="width: auto; padding: 0 20px;" onclick="addTopic()">追加</button>
     </div>
 
     <hr class="section-divider" />
 
-    <!-- 受験者リスト読み込み（任意） -->
-    <div class="section-label">
-      受験者リスト（任意）
-      <span style="font-size:0.7rem;font-weight:400;color:var(--muted);">氏名表示・未参加チェックに使用</span>
+    <div class="form-group">
+        <label>共通受験者リスト（CSV形式 / 任意）</label>
+        <textarea id="setup-roster" placeholder="学籍番号,氏名&#10;2024001,田中太郎..."></textarea>
     </div>
-
-    <div class="import-tabs">
-      <button class="tab-btn active" onclick="switchTab('paste')">📋 貼り付け</button>
-      <button class="tab-btn"        onclick="switchTab('file')">📁 CSVファイル</button>
-    </div>
-
-    <!-- 貼り付け -->
-    <div class="tab-panel active" id="tab-paste">
-      <div class="form-group">
-        <label>CSVまたはテキストで貼り付け（1行1人）</label>
-        <textarea id="roster-textarea"
-          placeholder="学籍番号,氏名&#10;2024001,田中太郎&#10;2024002,鈴木花子&#10;&#10;※氏名なしでも可（学籍番号のみ1列）"></textarea>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-ghost" onclick="importFromText()">読み込む</button>
-        <button class="btn btn-ghost" onclick="clearRoster()">クリア</button>
-      </div>
-    </div>
-
-    <!-- CSVファイル -->
-    <div class="tab-panel" id="tab-file">
-      <div class="file-drop" onclick="document.getElementById('roster-file').click()">
-        <div style="font-size:2rem;">📁</div>
-        <p>クリックしてCSVファイルを選択</p>
-        <p style="font-size:0.72rem;margin-top:0.3rem;">（UTF-8またはShift-JIS対応）</p>
-        <input type="file" id="roster-file" accept=".csv,.txt" onchange="importFromFile(event)" />
-      </div>
-    </div>
-
-    <!-- プレビュー -->
-    <div class="roster-preview" id="roster-preview"></div>
-
-    <hr class="section-divider" />
-
-    <div class="error-msg" id="setup-error"></div>
-    <button class="btn btn-green" onclick="startDashboard()">▶ 監視を開始する</button>
+    
+    <button class="btn btn-green" onclick="startDashboard()">🎥 総合ダッシュボードを起動</button>
+    <div id="setup-error" class="error-msg" style="margin-top:10px;"></div>
   </div>
 </div>
 
-<!-- =====================================================
-     SCREEN 3: ダッシュボード
-     ===================================================== -->
+<!-- ダッシュボード -->
 <div id="screen-dash" class="screen">
-
   <div class="dash-header">
     <div class="dash-header-l">
-      <span>👨‍💼</span>
-      <h1>接続監視システム</h1>
-      <span class="badge-admin">ADMIN</span>
+      <span>🛡️</span>
+      <h1>総合監視ダッシュボード</h1>
+      <span class="badge-multi">Multi-Session</span>
     </div>
-    <div class="dash-header-r">
-      <span class="live-dot"></span>
-      <span style="font-size:0.73rem;color:var(--muted);">リアルタイム監視中</span>
-      <span class="pill-session" id="dash-session">--</span>
+    <div style="display: flex; gap: 15px; align-items: center;">
+        <span id="last-poll-time" style="font-size: 0.75rem; color: var(--muted);">--</span>
+        <button class="btn btn-ghost" onclick="location.reload()">再起動</button>
     </div>
   </div>
 
   <div class="stats-bar">
-    <div class="stat c-total"><span class="stat-n" id="s-total">0</span><span class="stat-l">受験者数</span></div>
-    <div class="stat c-safe"> <span class="stat-n" id="s-safe">0</span><span class="stat-l">安全</span></div>
-    <div class="stat c-alert"><span class="stat-n" id="s-alert">0</span><span class="stat-l">⚠️ 検知中</span></div>
-    <div class="stat c-absent"><span class="stat-n" id="s-absent">0</span><span class="stat-l">未参加</span></div>
-    <div class="stat" style="margin-left:auto;">
-      <span class="stat-n" style="font-size:0.77rem;color:var(--muted);" id="last-poll">--</span>
-      <span class="stat-l">最終更新</span>
-    </div>
+    <div class="stat"><span class="stat-n" id="stat-exams">0</span><span class="stat-l">試験数</span></div>
+    <div class="stat"><span class="stat-n" id="stat-total">0</span><span class="stat-l">総受験者</span></div>
+    <div class="stat" style="color:var(--green);"><span class="stat-n" id="stat-safe">0</span><span class="stat-l">正常</span></div>
+    <div class="stat" style="color:var(--red);"><span class="stat-n" id="stat-alert">0</span><span class="stat-l">警告検知</span></div>
+    <div class="stat" style="color:var(--orange);"><span class="stat-n" id="stat-absent">0</span><span class="stat-l">未参加</span></div>
   </div>
 
-  <div class="dash-content">
+  <div class="dash-main">
+    <div class="dash-left">
+      <!-- グラフ -->
+      <div class="card-v">
+        <h2>📊 検知トレンド（全セッション合計）</h2>
+        <div id="chart-container">
+            <canvas id="alertChart"></canvas>
+        </div>
+      </div>
 
-    <!-- アクティブアラート -->
-    <div id="alert-section">
-      <div class="section-hd">🚨 接続アラート</div>
-      <div class="alert-cards" id="alert-cards"></div>
+      <!-- 受験者リスト -->
+      <div class="card-v">
+        <h2>👥 受験者状況詳細</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>試験</th>
+                        <th>学籍番号</th>
+                        <th>名前</th>
+                        <th>ステータス</th>
+                        <th>累計検知</th>
+                        <th>最終検知</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="main-tbody">
+                    <!-- JS -->
+                </tbody>
+            </table>
+        </div>
+      </div>
     </div>
 
-    <!-- 受験者テーブル -->
-    <div class="table-section">
-      <div class="table-hd">
-        <div class="section-hd" style="margin:0;">受験者一覧</div>
-        <button class="btn btn-ghost" onclick="exportCSV()">📥 CSVエクスポート</button>
+    <div class="dash-right">
+      <div class="card-v">
+        <h2>🚨 アクティブアラート</h2>
+        <div class="alert-scroll" id="active-alerts-list">
+            <!-- JS -->
+        </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>学籍番号</th>
-              <th>氏名</th>
-              <th>ステータス</th>
-              <th>検知回数</th>
-              <th>最終検知</th>
-              <th>開始時刻</th>
-            </tr>
-          </thead>
-          <tbody id="student-tbody">
-            <tr><td class="empty-td" colspan="6">受験者が監視を開始すると表示されます</td></tr>
-          </tbody>
-        </table>
+
+      <div class="card-v">
+        <h2>📝 履歴ログ</h2>
+        <div id="log-box" style="font-size: 0.7rem; color: var(--muted); max-height: 300px; overflow-y: auto;">
+            <!-- JS -->
+        </div>
       </div>
     </div>
-
-    <!-- イベントログ -->
-    <div class="log-section">
-      <div class="log-hd">
-        <div class="section-hd" style="margin:0;">イベントログ</div>
-        <button class="btn btn-ghost" onclick="clearLog()">🗑 クリア</button>
-      </div>
-      <div id="log-box"><div class="log-empty">ここにイベントが記録されます</div></div>
-    </div>
-
   </div>
 </div>
 
 <div id="toast-wrap"></div>
 
 <script>
-  // ================================================================
-  // ⚠️ 管理パスワード設定 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  //   デプロイ前に必ずパスワードを変更してください
-  // ================================================================
   const ADMIN_PASSWORD = 'admin';
-  // ================================================================
+  const NTFY_BASE      = 'https://ntfy.sh';
+  const POLL_INTERVAL  = 3000;
 
-  const NTFY_BASE     = 'https://ntfy.sh';
-  const POLL_INTERVAL = 3000;
+  let activeTopics    = [];
+  let rosterData      = {}; // { sid: name }
+  let lastMessageIds  = {}; // { topic: lastId }
+  let studentStates   = {}; // { "topic:sid": { topic, sid, status, alertCount, alerts: [] } }
+  let alertChart      = null;
+  let chartData       = { labels: [], datasets: [{ label: '検知数', data: [], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', fill: true, tension: 0.4 }] };
 
-  let topic          = '';
-  let roster         = {};  // { id: name }
-  let students       = {};  // { id: { status, alertCount, registeredAt, lastAlertAt } }
-  let lastMessageId  = null;
-  let pollTimer      = null;
-  let logEntries     = [];
-  let acknowledged   = new Set();
-
-  // ── URL パラメータからトピック自動入力 ────────────────────────────
-  const urlParams = new URLSearchParams(location.search);
-  if (urlParams.get('topic')) {
-    document.getElementById('topic-input').value = urlParams.get('topic');
-    updateShareBox();
-  }
-
-  // ================================================================
-  // ログイン
-  // ================================================================
+  // 1. ログイン処理
   function checkPassword() {
-    const v = document.getElementById('pw-input').value;
-    if (v === ADMIN_PASSWORD) {
-      switchScreen('screen-setup');
+    if (document.getElementById('pw-input').value === ADMIN_PASSWORD) {
+        switchScreen('screen-setup');
     } else {
-      document.getElementById('pw-error').textContent = 'パスワードが正しくありません';
-      document.getElementById('pw-input').value = '';
+        document.getElementById('pw-error').textContent = 'パスワードが違います';
     }
   }
-  document.getElementById('pw-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') checkPassword();
-  });
 
-  // ================================================================
-  // セットアップ
-  // ================================================================
-  function generateCode() {
-    const d   = new Date().toISOString().slice(0,10).replace(/-/g,'');
-    const r   = Math.random().toString(36).slice(2,6);
-    document.getElementById('topic-input').value = `exam-${d}-${r}`;
-    updateShareBox();
+  // 2. セットアップ処理
+  function addTopic() {
+    const input = document.getElementById('new-topic-input');
+    const topic = input.value.trim();
+    if (topic && !activeTopics.includes(topic)) {
+        activeTopics.push(topic);
+        input.value = '';
+        renderTopicList();
+    }
   }
 
-  function onTopicChange() { updateShareBox(); }
-
-  function updateShareBox() {
-    const v   = document.getElementById('topic-input').value.trim();
-    const box = document.getElementById('share-box');
-    if (!v) { box.style.display = 'none'; return; }
-    box.style.display = 'block';
-    document.getElementById('share-code').value = v;
-    const base = location.href.replace('admin.html','client.html').split('?')[0];
-    document.getElementById('share-url').value = `${base}?topic=${encodeURIComponent(v)}`;
+  function removeTopic(t) {
+    activeTopics = activeTopics.filter(x => x !== t);
+    renderTopicList();
   }
 
-  function copyCode() {
-    const val = document.getElementById('share-code').value;
-    navigator.clipboard.writeText(val).then(() => {
-      const btns = document.querySelectorAll('.copy-btn');
-      btns[0].textContent = '✓ コピー済';
-      setTimeout(() => { btns[0].textContent = 'コピー'; }, 2000);
-    }).catch(() => { document.getElementById('share-code').select(); document.execCommand('copy'); });
+  function renderTopicList() {
+    const ui = document.getElementById('topic-list-ui');
+    ui.innerHTML = activeTopics.map(t => `
+        <div class="topic-item">
+            <div class="topic-item-info">
+                <span class="topic-item-id">${t}</span>
+            </div>
+            <button class="btn btn-red" onclick="removeTopic('${t}')">削除</button>
+        </div>
+    `).join('');
   }
 
-  function copyUrl() {
-    const val = document.getElementById('share-url').value;
-    navigator.clipboard.writeText(val).then(() => {
-      const btns = document.querySelectorAll('.copy-btn');
-      btns[1].textContent = '✓ コピー済';
-      setTimeout(() => { btns[1].textContent = 'コピー'; }, 2000);
-    }).catch(() => { document.getElementById('share-url').select(); document.execCommand('copy'); });
-  }
-
-  // ── タブ切り替え ──────────────────────────────────────────────────
-  function switchTab(id) {
-    document.querySelectorAll('.tab-btn').forEach((b,i) => {
-      b.classList.toggle('active', (i===0&&id==='paste')||(i===1&&id==='file'));
-    });
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.getElementById('tab-' + id).classList.add('active');
-  }
-
-  // ── ロスターパース ────────────────────────────────────────────────
-  function parseRosterText(raw) {
-    const result = {};
-    raw.replace(/^\uFEFF/,'').split('\n').filter(Boolean).forEach(line => {
-      const cols = line.split(/[,\t]/).map(s => s.trim().replace(/^["']|["']$/g,''));
-      const id   = cols[0];
-      if (id) result[id] = cols[1] || '';
-    });
-    return result;
-  }
-
-  function showRosterPreview(r) {
-    const count = Object.keys(r).length;
-    const el    = document.getElementById('roster-preview');
-    if (count === 0) { el.style.display = 'none'; return; }
-    const sample = Object.entries(r).slice(0,4).map(([id,n]) => n ? `${id}（${n}）` : id).join('、');
-    el.textContent = `✓ ${count}名を読み込みました：${sample}${count>4?'…など':''}`;
-    el.style.display = 'block';
-  }
-
-  function importFromText() {
-    roster = parseRosterText(document.getElementById('roster-textarea').value);
-    showRosterPreview(roster);
-  }
-
-  function importFromFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    // Shift-JIS でも読めるよう TextDecoder を試みる
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const text = ev.target.result;
-      roster = parseRosterText(text);
-      document.getElementById('roster-textarea').value = text;
-      switchTab('paste');
-      showRosterPreview(roster);
-    };
-    reader.readAsText(file, 'UTF-8');
-  }
-
-  function clearRoster() {
-    roster = {};
-    document.getElementById('roster-textarea').value = '';
-    document.getElementById('roster-preview').style.display = 'none';
-    if (document.getElementById('roster-file')) document.getElementById('roster-file').value = '';
-  }
-
-  // ── ダッシュボード開始 ────────────────────────────────────────────
+  // 3. ダッシュボード起動
   function startDashboard() {
-    const v = document.getElementById('topic-input').value.trim();
-    if (!v) {
-      document.getElementById('setup-error').textContent = 'セッションコードを入力してください';
-      return;
+    if (activeTopics.length === 0) {
+        document.getElementById('setup-error').textContent = 'セッションを少なくとも1つ追加してください';
+        return;
     }
-    topic = v;
-    document.getElementById('setup-error').textContent = '';
-    document.getElementById('dash-session').textContent = 'セッション：' + topic;
+    
+    // ロスター解析
+    const rawRoster = document.getElementById('setup-roster').value;
+    rawRoster.split('\n').forEach(line => {
+        const [sid, name] = line.split(/[,\t]/).map(s => s.trim());
+        if (sid) rosterData[sid] = name || '';
+    });
+
     switchScreen('screen-dash');
-
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-
-    pollMessages();
-    pollTimer = setInterval(pollMessages, POLL_INTERVAL);
-    renderDashboard();
+    initChart();
+    
+    // ポーリング開始
+    activeTopics.forEach(t => lastMessageIds[t] = 'all');
+    pollAll();
+    setInterval(pollAll, POLL_INTERVAL);
   }
 
-  // ================================================================
-  // ntfy.sh ポーリング
-  // ================================================================
-  async function pollMessages() {
-    try {
-      const since = lastMessageId || 'all';
-      const resp  = await fetch(`${NTFY_BASE}/${topic}/json?poll=1&since=${since}`);
-      if (!resp.ok) return;
-      const text  = await resp.text();
-      text.trim().split('\n').filter(Boolean).forEach(line => {
+  // 4. ポーリング同期
+  async function pollAll() {
+    for (const topic of activeTopics) {
         try {
-          const msg = JSON.parse(line);
-          if (msg.event === 'message') { processMsg(msg); lastMessageId = msg.id; }
-        } catch(_) {}
-      });
-      document.getElementById('last-poll').textContent = new Date().toLocaleTimeString('ja-JP');
-    } catch(_) {}
+            const since = lastMessageIds[topic];
+            const resp = await fetch(`${NTFY_BASE}/${topic}/json?poll=1&since=${since}`);
+            if (!resp.ok) continue;
+            
+            const text = await resp.text();
+            text.trim().split('\n').filter(Boolean).forEach(line => {
+                const msg = JSON.parse(line);
+                if (msg.event === 'message') {
+                    processMessage(topic, msg);
+                    lastMessageIds[topic] = msg.id;
+                }
+            });
+        } catch(e) { console.error(e); }
+    }
+    updateDashboardUI();
+    document.getElementById('last-poll-time').textContent = '最終更新: ' + new Date().toLocaleTimeString();
   }
 
-  // メッセージ形式: "TYPE:学籍番号:説明"
-  function processMsg(msg) {
-    const parts = (msg.message || '').split(':');
-    const type  = parts[0];
-    const sid   = parts[1];
-    if (!sid || !['REGISTER','ALERT','DISMISS'].includes(type)) return;
+  function processMessage(topic, msg) {
+    const [type, sid, text] = (msg.message || '').split(':');
+    if (!sid || !['REGISTER', 'ALERT', 'DISMISS'].includes(type)) return;
 
-    const ts = new Date(msg.time * 1000);
+    const key = `${topic}:${sid}`;
+    const ts  = new Date(msg.time * 1000);
 
-    if (!students[sid]) {
-      students[sid] = { status:'monitoring', alertCount:0, registeredAt:ts, lastAlertAt:null };
+    if (!studentStates[key]) {
+        studentStates[key] = { topic, sid, status: 'safe', alertCount: 0, lastAlert: null, registeredAt: ts, alerts: [] };
     }
 
     if (type === 'REGISTER') {
-      students[sid].status       = 'monitoring';
-      students[sid].registeredAt = ts;
-      addLog('reg', sid, '監視を開始しました', ts);
+        studentStates[key].status = 'safe';
+        addLog(topic, sid, '監視開始', ts);
+    } else if (type === 'ALERT') {
+        const isNew = studentStates[key].status !== 'alert';
+        studentStates[key].status = 'alert';
+        studentStates[key].alertCount++;
+        studentStates[key].lastAlert = ts;
+        studentStates[key].alerts.push(ts);
+        
+        if (isNew) {
+            showToast(topic, sid);
+            addLog(topic, sid, '接続検知🚨', ts);
+            updateChartWithAlert(ts);
+        }
+    } else if (type === 'DISMISS') {
+        studentStates[key].status = 'safe';
+        addLog(topic, sid, 'アラート解除', ts);
     }
-    if (type === 'ALERT') {
-      const wasAlert = students[sid].status === 'alert';
-      students[sid].status      = 'alert';
-      students[sid].alertCount += 1;
-      students[sid].lastAlertAt = ts;
-      acknowledged.delete(sid);
-      addLog('alert', sid, `接続を検知しました（${students[sid].alertCount}回目）`, ts);
-      if (!wasAlert) { showToast(sid, ts, students[sid].alertCount); notifyBrowser(sid, ts); }
-    }
-    if (type === 'DISMISS') {
-      students[sid].status = 'monitoring';
-      addLog('dismiss', sid, 'アラートを確認しました', ts);
-    }
-    renderDashboard();
   }
 
-  // ================================================================
-  // ダッシュボード描画
-  // ================================================================
-  function renderDashboard() {
-    // ロスターから「未参加」リストを計算
-    const absentIds = Object.keys(roster).filter(id => !students[id]);
+  // 5. UI更新
+  function updateDashboardUI() {
+    // 統計
+    const studentsArr = Object.values(studentStates);
+    const alertN = studentsArr.filter(s => s.status === 'alert').length;
+    const safeN  = studentsArr.filter(s => s.status === 'safe').length;
+    
+    // ロスターから未参加計算 (単純化のため全トピックでの未参加を合算)
+    let absentN = 0;
+    const allSeenSids = new Set(studentsArr.map(s => s.sid));
+    Object.keys(rosterData).forEach(rsid => {
+        if (!allSeenSids.has(rsid)) absentN++;
+    });
 
-    const allIds  = [...new Set([...Object.keys(students), ...Object.keys(roster)])];
-    const total   = Object.keys(students).length + absentIds.length;
-    const alertN  = Object.values(students).filter(d => d.status==='alert').length;
-    const safeN   = Object.values(students).filter(d => d.status!=='alert').length;
-    const absentN = absentIds.length;
+    document.getElementById('stat-exams').textContent  = activeTopics.length;
+    document.getElementById('stat-total').textContent  = studentsArr.length + absentN;
+    document.getElementById('stat-safe').textContent   = safeN;
+    document.getElementById('stat-alert').textContent  = alertN;
+    document.getElementById('stat-absent').textContent = absentN;
 
-    document.getElementById('s-total').textContent  = total;
-    document.getElementById('s-safe').textContent   = safeN;
-    document.getElementById('s-alert').textContent  = alertN;
-    document.getElementById('s-absent').textContent = absentN;
-
-    // ── アクティブアラートセクション ──────────────────────────────
-    const alertList = Object.entries(students).filter(([id,d]) => d.status==='alert' && !acknowledged.has(id));
-    const sec = document.getElementById('alert-section');
-    sec.style.display = alertList.length > 0 ? 'block' : 'none';
-    document.getElementById('alert-cards').innerHTML = alertList.map(([id,d]) => `
-      <div class="alert-card">
-        <div class="alert-card-l">
-          <span class="ac-icon">🚨</span>
-          <div>
-            <div class="ac-id">${esc(id)}</div>
-            ${roster[id] ? `<div class="ac-name">${esc(roster[id])}</div>` : ''}
-            <div class="ac-meta">
-              ${d.lastAlertAt ? d.lastAlertAt.toLocaleString('ja-JP') : '--'}
-              　通算 ${d.alertCount} 回
+    // アクティブアラート
+    const activeAlerts = studentsArr.filter(s => s.status === 'alert').sort((a,b) => b.lastAlert - a.lastAlert);
+    document.getElementById('active-alerts-list').innerHTML = activeAlerts.map(s => `
+        <div class="alert-card">
+            <div class="ac-top">
+                <div class="ac-info">
+                    <span class="ac-topic">${s.topic}</span>
+                    <span class="ac-id">${s.sid}</span>
+                    <span class="ac-name">${rosterData[s.sid] || '---'}</span>
+                </div>
+                <button class="btn btn-red" style="font-size:0.7rem;" onclick="confirmAlert('${s.topic}','${s.sid}')">確認完了</button>
             </div>
-          </div>
+            <span class="ac-time">最終検知: ${s.lastAlert.toLocaleTimeString()} (累計${s.alertCount}回)</span>
         </div>
-        <button class="btn btn-red" onclick="ack('${esc(id)}')">✓ 確認</button>
-      </div>`).join('');
+    `).join('');
 
-    // ── テーブル ─────────────────────────────────────────────────
-    const tbody = document.getElementById('student-tbody');
+    // テーブル
+    // 表示用の行リスト作成 (Students + Absent)
+    const tableRows = [...studentsArr];
+    // Absent追加
+    Object.keys(rosterData).forEach(rsid => {
+        if (!allSeenSids.has(rsid)) tableRows.push({ topic:'-', sid:rsid, status:'absent', alertCount:0, lastAlert:null });
+    });
 
-    // 並び順: アラート → 監視中 → 未参加（ロスター順）
-    const rows = [
-      ...Object.entries(students).sort(([,a],[,b]) => {
-        if (a.status==='alert' && b.status!=='alert') return -1;
-        if (b.status==='alert' && a.status!=='alert') return 1;
-        return 0;
-      }),
-      ...absentIds.map(id => [id, { status:'absent', alertCount:0, registeredAt:null, lastAlertAt:null }])
-    ];
+    tableRows.sort((a, b) => {
+        if (a.status === 'alert' && b.status !== 'alert') return -1;
+        if (b.status === 'alert' && a.status !== 'alert') return 1;
+        return a.sid.localeCompare(b.sid, undefined, { numeric:true });
+    });
 
-    if (rows.length === 0) {
-      tbody.innerHTML = `<tr><td class="empty-td" colspan="6">受験者が監視を開始すると表示されます</td></tr>`;
-      return;
+    document.getElementById('main-tbody').innerHTML = tableRows.map(s => `
+        <tr class="${s.status==='alert'?'row-alert':''} ${s.status==='absent'?'row-absent':''}">
+            <td style="font-family:monospace; font-size:0.7rem;">${s.topic}</td>
+            <td><strong>${s.sid}</strong></td>
+            <td>${rosterData[s.sid] || '---'}</td>
+            <td><span class="status-pill ${s.status}">${s.status.toUpperCase()}</span></td>
+            <td>${s.alertCount}</td>
+            <td>${s.lastAlert ? s.lastAlert.toLocaleTimeString() : '---'}</td>
+            <td>
+                ${s.status==='alert' ? `<button class="btn btn-red" style="padding:4px 8px; font-size:0.7rem;" onclick="confirmAlert('${s.topic}','${s.sid}')">解</button>` : '---'}
+            </td>
+        </tr>
+    `).join('');
+  }
+
+  function confirmAlert(topic, sid) {
+    const key = `${topic}:${sid}`;
+    if (studentStates[key]) {
+        studentStates[key].status = 'safe';
+        addLog(topic, sid, '管理者が確認', new Date());
+        updateDashboardUI();
     }
-
-    tbody.innerHTML = rows.map(([id, d]) => {
-      const name  = roster[id] || '─';
-      const badge =
-        d.status === 'alert'      ? `<span class="s-badge alert">⚠️ 検知中</span>` :
-        d.status === 'absent'     ? `<span class="s-badge absent">未参加</span>` :
-        d.status === 'monitoring' ? `<span class="s-badge safe">✅ 安全</span>` :
-                                    `<span class="s-badge monitoring">${esc(d.status)}</span>`;
-      const cntCls = d.alertCount > 0 ? 'cnt red' : 'cnt';
-      const rowCls = d.status === 'alert' ? 'row-alert' : d.status === 'absent' ? 'row-absent' : '';
-      return `
-        <tr class="${rowCls}">
-          <td><strong>${esc(id)}</strong></td>
-          <td>${esc(name)}</td>
-          <td>${badge}</td>
-          <td><span class="${cntCls}">${d.alertCount}</span></td>
-          <td>${d.lastAlertAt ? d.lastAlertAt.toLocaleTimeString('ja-JP') : '─'}</td>
-          <td>${d.registeredAt ? d.registeredAt.toLocaleTimeString('ja-JP') : '─'}</td>
-        </tr>`;
-    }).join('');
   }
 
-  function ack(id) { acknowledged.add(id); renderDashboard(); }
-
-  // ================================================================
-  // ログ
-  // ================================================================
-  function addLog(type, sid, msg, ts) {
-    const box = document.getElementById('log-box');
-    const emp = box.querySelector('.log-empty');
-    if (emp) emp.remove();
-
-    const labels = { alert:'【警告】', reg:'【登録】', dismiss:'【確認】' };
-    const div = document.createElement('div');
-    div.className = `log-row l-${type}`;
-    div.innerHTML = `
-      <span class="lt">${ts.toLocaleString('ja-JP')}</span>
-      <span class="lk ${type}">${labels[type]||''}</span>
-      <span class="lm">${esc(sid)}${roster[sid]?'（'+esc(roster[sid])+'）':''} ${esc(msg)}</span>`;
-    box.appendChild(div);
-    box.scrollTop = box.scrollHeight;
-    logEntries.push({ type, sid, msg, ts });
+  // 6. チャート
+  function initChart() {
+    const ctx = document.getElementById('alertChart').getContext('2d');
+    alertChart = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#64748b' } },
+                y: { beginAtZero: true, grid: { color: '#2a2d3a' }, ticks: { stepSize: 1, color: '#64748b' } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
   }
 
-  function clearLog() {
-    logEntries = [];
-    document.getElementById('log-box').innerHTML = '<div class="log-empty">ここにイベントが記録されます</div>';
+  function updateChartWithAlert(ts) {
+    const timeLabel = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const idx = chartData.labels.indexOf(timeLabel);
+    if (idx >= 0) {
+        chartData.datasets[0].data[idx]++;
+    } else {
+        chartData.labels.push(timeLabel);
+        chartData.datasets[0].data.push(1);
+        if (chartData.labels.length > 20) {
+            chartData.labels.shift();
+            chartData.datasets[0].data.shift();
+        }
+    }
+    alertChart.update();
   }
 
-  // ================================================================
-  // トースト / ブラウザ通知
-  // ================================================================
-  function showToast(sid, ts, count) {
-    const wrap = document.getElementById('toast-wrap');
-    const t = document.createElement('div');
-    t.className = 'toast';
-    t.innerHTML = `
-      <div class="toast-title">🚨 接続アラート</div>
-      <div class="toast-body"><strong>${esc(sid)}</strong>${roster[sid]?'（'+esc(roster[sid])+'）':''} がインターネットに接続しました</div>
-      <div class="toast-time">${ts.toLocaleTimeString('ja-JP')} ／ 通算 ${count} 回</div>`;
-    wrap.appendChild(t);
-    setTimeout(() => { t.style.transition='opacity 0.5s'; t.style.opacity='0'; setTimeout(()=>t.remove(),500); }, 7000);
-  }
-
-  function notifyBrowser(sid, ts) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    new Notification('🚨 接続アラート', {
-      body: `${sid}${roster[sid]?'（'+roster[sid]+'）':''} が接続 (${ts.toLocaleTimeString('ja-JP')})` });
-  }
-
-  // ================================================================
-  // CSV エクスポート
-  // ================================================================
-  function exportCSV() {
-    const allEntries = [
-      ...Object.entries(students),
-      ...Object.keys(roster).filter(id => !students[id]).map(id => [id, {status:'absent',alertCount:0,registeredAt:null,lastAlertAt:null}])
-    ];
-    if (allEntries.length === 0) { alert('データがありません'); return; }
-    const header = '学籍番号,氏名,ステータス,検知回数,最終検知,開始時刻\n';
-    const rows = allEntries.map(([id,d]) =>
-      `"${id}","${roster[id]||''}","${d.status}","${d.alertCount}",` +
-      `"${d.lastAlertAt?d.lastAlertAt.toLocaleString('ja-JP'):''}",` +
-      `"${d.registeredAt?d.registeredAt.toLocaleString('ja-JP'):''}"`
-    ).join('\n');
-    const blob = new Blob(['\uFEFF'+header+rows], {type:'text/csv;charset=utf-8;'});
-    const a = Object.assign(document.createElement('a'), { href:URL.createObjectURL(blob), download:`接続監視_${topic}.csv` });
-    a.click(); URL.revokeObjectURL(a.href);
-  }
-
-  // ================================================================
-  // ユーティリティ
-  // ================================================================
+  // 7. ユーティリティ
   function switchScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
   }
 
-  function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  function addLog(topic, sid, action, ts) {
+    const log = document.getElementById('log-box');
+    const div = document.createElement('div');
+    div.style.padding = '4px 0';
+    div.style.borderBottom = '1px solid var(--border)';
+    div.innerHTML = `<span style="color:var(--muted)">[${ts.toLocaleTimeString()}]</span> <span style="font-weight:bold; color:var(--blue)">${topic}</span>: <strong>${sid}</strong> → ${action}`;
+    log.prepend(div);
   }
 
-  document.getElementById('topic-input').addEventListener('keydown', e => { if(e.key==='Enter') startDashboard(); });
+  function showToast(topic, sid) {
+    const wrap = document.getElementById('toast-wrap');
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = `<strong>🚨 検知アラート</strong><br>試験: ${topic}<br>受験者: ${sid}`;
+    wrap.appendChild(t);
+    // システム音の代わりにデスクトップ通知
+    if (Notification.permission === 'granted') new Notification('🚨 接続検知', { body: `${topic} で ${sid} の接続を確認しました` });
+    setTimeout(() => { t.style.opacity='0'; setTimeout(()=>t.remove(),500); }, 5000);
+  }
 </script>
 </body>
 </html>
