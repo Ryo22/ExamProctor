@@ -20,7 +20,7 @@
     .screen { display: none; min-height: 100vh; flex-direction: column; }
     .screen.active { display: flex; }
 
-    /* Login Card */
+    /* Login */
     #screen-input { align-items: center; justify-content: center; padding: 1.5rem; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2.5rem; width: 100%; max-width: 440px; text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.4); }
     .form-group { text-align: left; margin-bottom: 1.2rem; }
@@ -45,7 +45,7 @@
     .status-label { font-size: 2rem; font-weight: 900; margin-bottom: 0.5rem; }
     .status-label.safe { color: var(--green); }
     .status-label.alert { color: var(--red); }
-    .status-sub { color: var(--muted); font-size: 0.9rem; }
+    .status-sub { color: var(--muted); font-size: 0.9rem; text-align:center; padding: 0 20px; }
 
     /* Finished */
     #screen-finished { align-items: center; justify-content: center; background: radial-gradient(circle, #1e293b, #0f172a); }
@@ -77,7 +77,7 @@
   <div class="card">
     <div style="font-size: 3rem; margin-bottom: 1rem;">🔒</div>
     <h1>接続監視システム</h1>
-    <p style="color:var(--muted); font-size:0.85rem; margin-bottom:2rem;">名簿に登録されている「学籍番号」を入力してください</p>
+    <p style="color:var(--muted); font-size:0.85rem; margin-bottom:2rem;">監視を開始するとインターネット接続がチェックされます</p>
     <div class="form-group" id="topic-container">
       <label>セッションコード</label>
       <input type="text" id="topic-input" placeholder="exam-xxxx" />
@@ -87,7 +87,7 @@
     </div>
     <div class="form-group">
       <label>学籍番号</label>
-      <input type="text" id="student-id-input" placeholder="2024001" />
+      <input type="text" id="student-id-input" placeholder="学籍番号を入力" />
     </div>
     <button class="btn btn-green" onclick="beginMonitoring()">監視を開始する</button>
     <div id="input-error" style="color:var(--red); font-size:0.8rem; margin-top:10px;"></div>
@@ -104,8 +104,8 @@
   </div>
   <div class="mon-body">
     <div class="status-ring idle" id="status-ring">🔒</div>
-    <div class="status-label idle" id="status-label">確認中</div>
-    <div class="status-sub" id="status-sub">インターネットを切断して試験を開始してください</div>
+    <div class="status-label idle" id="status-label">監視中</div>
+    <div class="status-sub" id="status-sub">インターネットを切断した状態で試験を受けてください</div>
     <div id="last-check" style="margin-top:2rem; font-size:0.7rem; color:var(--muted);">最終確認: --</div>
     <div id="alert-hist" style="display:none; margin-top:1rem; color:var(--red); font-size:0.8rem; font-weight:700;">
         ⚠️ 接続を検知済み（<span id="alert-count-disp">0</span>回）
@@ -117,9 +117,9 @@
   <div class="finish-icon">🎊</div>
   <h1 style="font-size: 2rem; color: var(--green); margin-bottom:1rem;">試験終了</h1>
   <p style="text-align:center; line-height:1.6; padding:0 2rem;">
-    お疲れ様でした。監視を終了します。<br>
+    試験は終了しました。お疲れ様でした！<br>
     <span style="color:var(--muted); font-size:0.8rem; font-style:italic;">Exam finished. Well done!</span><br><br>
-    ブラウザを閉じて、監督者の指示に従ってください。
+    そのままブラウザを閉じてください。
   </p>
   <button class="btn btn-ghost" style="margin-top:2.5rem; padding:10px 40px;" onclick="location.reload()">ホームに戻る</button>
 </div>
@@ -135,9 +135,8 @@
     <div style="background:var(--bg); padding:15px; border-radius:12px; margin-bottom:2rem; font-size:0.85rem; text-align:left;">
       検知時刻: <b id="ov-time">--</b><br>
       学籍番号: <b id="ov-sid">--</b><br>
-      累計回数: <b id="ov-count">--</b>
     </div>
-    <button class="btn btn-blue" onclick="dismissAlert()">OK / 確認しました</button>
+    <button class="btn btn-blue" onclick="dismissAlert()">OK / 了解しました</button>
   </div>
 </div>
 
@@ -152,15 +151,15 @@
   let alertCount = 0;
   let isAlertActive = false;
   let lastMessageId = 'all';
+  let myStartTime = 0;
 
-  // URL引き継ぎ
+  // URL初期化
   const q = new URLSearchParams(location.search);
-  const tParam = q.get('topic');
-  if (tParam) {
-    document.getElementById('topic-input').value = tParam;
+  if (q.get('topic')) {
+    document.getElementById('topic-input').value = q.get('topic');
     document.getElementById('topic-container').style.display = 'none';
     document.getElementById('topic-badge').style.display = 'block';
-    document.getElementById('topic-badge-val').textContent = tParam;
+    document.getElementById('topic-badge-val').textContent = q.get('topic');
   }
 
   function beginMonitoring() {
@@ -170,13 +169,15 @@
     
     topic = tVal;
     studentId = sVal;
+    myStartTime = Math.floor(Date.now() / 1000); // 秒単位
+
     document.getElementById('mon-sid').textContent = studentId;
     document.getElementById('mon-topic').textContent = topic;
     document.getElementById('ov-sid').textContent = studentId;
     document.getElementById('status-lamp').style.display = 'flex';
     
     switchScreen('screen-monitor');
-    sendEvent('REGISTER', '監視開始');
+    sendEvent('REGISTER', '開始');
     
     checkConnection();
     monitorTimer = setInterval(checkConnection, CHECK_INTERVAL);
@@ -191,7 +192,7 @@
 
     if (online) {
       onInternetDetected();
-      pollAdmin(); // オンライン時のみ指示確認
+      pollAdmin(); 
     } else {
       onOffline();
     }
@@ -206,8 +207,11 @@
       text.trim().split('\n').filter(Boolean).forEach(line => {
         const msg = JSON.parse(line);
         if (msg.event === 'message') {
-          lastMessageId = msg.id;
-          if (msg.message === 'FINISH:ALL:END') finishExam();
+            lastMessageId = msg.id;
+            // メッセージが "FINISH_SIGNAL" で始まり、かつ送信時刻が自分の開始時刻より後の場合のみ反応
+            if (msg.message.startsWith('FINISH_SIGNAL:') && msg.time >= myStartTime) {
+                finishExam();
+            }
         }
       });
     } catch(e) {}
@@ -222,7 +226,6 @@
     document.getElementById('alert-hist').style.display = 'block';
     document.getElementById('alert-count-disp').textContent = alertCount;
     document.getElementById('ov-time').textContent = new Date().toLocaleTimeString();
-    document.getElementById('ov-count').textContent = alertCount;
     document.getElementById('alert-overlay').style.display = 'flex';
   }
 
@@ -262,7 +265,7 @@
     document.getElementById('status-sub').textContent = sub;
     
     ldot.className = 'lamp-dot ' + type;
-    ltxt.textContent = (type==='alert') ? '⚠️ ネットワークを切断してください' : 'ONLINE (SAFE)';
+    ltxt.textContent = (type==='alert') ? '⚠️ ネットを切断してください' : 'ONLINE (SAFE)';
   }
 
   function switchScreen(id) {
@@ -273,7 +276,7 @@
   function copySessionUrl() {
     const u = new URL(location.href);
     u.searchParams.set('topic', topic);
-    navigator.clipboard.writeText(u.toString()).then(()=>alert('URLをコピーしました'));
+    navigator.clipboard.writeText(u.toString()).then(()=>alert('セッションURLをコピーしました'));
   }
 </script>
 </body>
