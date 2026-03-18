@@ -106,8 +106,8 @@
 
 <div id="screen-finished" class="screen">
   <div style="font-size: 6rem; margin-bottom:1rem;">🎊</div>
-  <h1 style="font-size: 2rem; color: var(--green); margin-bottom:1rem;">試験終了</h1>
-  <p style="text-align:center;">お疲れ様でした。ブラウザを閉じて終了してください。</p>
+  <h1 style="font-size: 2rem; color: var(--green); margin-bottom:1rem;">監視終了</h1>
+  <p style="text-align:center;">お疲れ様でした。試験は終了しました。<br>ブラウザを閉じてください。</p>
   <button class="btn btn-ghost" style="margin-top:2rem;" onclick="location.reload()">ホームに戻る</button>
 </div>
 
@@ -144,23 +144,16 @@
     const tVal = document.getElementById('topic-input').value.trim();
     const sVal = document.getElementById('student-id-input').value.trim();
     if (!tVal || !sVal) return;
-    
     if (Notification.permission !== 'granted') Notification.requestPermission();
-
-    topic = tVal;
-    studentId = sVal;
+    topic = tVal; studentId = sVal;
     myStartTime = Math.floor(Date.now() / 1000);
-
     document.getElementById('mon-sid').textContent = studentId;
     document.getElementById('mon-topic').textContent = topic;
     document.getElementById('status-lamp').style.display = 'flex';
-    
     switchScreen('screen-monitor');
     sendEvent('REGISTER', '開始');
-    
     window.addEventListener('blur', () => sendEvent('FOCUS_LOST', '離脱'));
     window.addEventListener('focus', () => sendEvent('FOCUS_GAINED', '復帰'));
-
     checkConnection();
     monitorTimer = setInterval(checkConnection, CHECK_INTERVAL);
   }
@@ -173,8 +166,9 @@
     } catch(e) { online = false; }
 
     if (online) {
-      onInternetDetected();
-      pollAdmin(); 
+      // ネットに繋がった際、まず管理者の終了信号を優先的に確認
+      const isFinished = await pollAdmin();
+      if (!isFinished) onInternetDetected();
     } else {
       onOffline();
     }
@@ -182,30 +176,26 @@
 
   async function pollAdmin() {
     try {
-      const resp = await fetch(`${NTFY_BASE}/${topic}/json?poll=1&since=${lastMessageId}`);
-      if (!resp.ok) return;
+      const resp = await fetch(`${NTFY_BASE}/${topic}/json?poll=1&since=${lastMessageId}`, {cache:'no-store'});
+      if (!resp.ok) return false;
       const text = await resp.text();
+      let finished = false;
       text.trim().split('\n').filter(Boolean).forEach(line => {
         const msg = JSON.parse(line);
         if (msg.event === 'message') {
             lastMessageId = msg.id;
-            // 終了信号の検知
-            if (msg.message.includes('FINISH_ALL') && msg.time >= (myStartTime - 10)) {
-                finishExam();
-            }
+            if (msg.message === 'FINISH_ALL' && msg.time >= (myStartTime - 10)) finished = true;
         }
       });
-    } catch(e) {}
+      if (finished) finishExam();
+      return finished;
+    } catch(e) { return false; }
   }
 
   function onInternetDetected() {
     if (isAlertActive) return;
     isAlertActive = true;
-    
-    if (Notification.permission === 'granted') {
-        new Notification('🚨 ネット接続検知！', { body: '直ちにネットワークを切断してください。' });
-    }
-
+    if (Notification.permission === 'granted') new Notification('🚨 ネット接続検知！', { body: '速やかに切断してください。' });
     sendEvent('ALERT', '検知');
     updateUI('alert', '⚠️', '接続検知！', 'すみやかに切断してください');
     document.getElementById('alert-overlay').style.display = 'flex';
@@ -226,27 +216,24 @@
   function finishExam() {
     clearInterval(monitorTimer);
     document.getElementById('status-lamp').style.display = 'none';
+    document.getElementById('alert-overlay').style.display = 'none';
+    isAlertActive = false;
     switchScreen('screen-finished');
   }
 
   function sendEvent(type, note) {
     const body = `${type}:${studentId}:${note}`;
-    fetch(`${NTFY_BASE}/${topic}`, { method:'POST', body:body }).catch(()=>{});
+    fetch(`${NTFY_BASE}/${topic}`, { method:'POST', body:body, cache:'no-store' }).catch(()=>{});
   }
 
   function updateUI(type, icon, label, sub) {
-    const ring = document.getElementById('status-ring');
-    const lbl = document.getElementById('status-label');
-    const ldot = document.getElementById('lamp-dot');
-    const ltxt = document.getElementById('lamp-text');
-
-    ring.className = 'status-ring ' + type;
-    ring.textContent = icon;
-    lbl.className = 'status-label ' + type;
-    lbl.textContent = label;
+    document.getElementById('status-ring').className = 'status-ring ' + type;
+    document.getElementById('status-ring').textContent = icon;
+    document.getElementById('status-label').className = 'status-label ' + type;
+    document.getElementById('status-label').textContent = label;
     document.getElementById('status-sub').textContent = sub;
-    ldot.className = 'lamp-dot ' + type;
-    ltxt.textContent = (type==='alert') ? '⚠️ 警告中' : '監視中 (SAFE)';
+    document.getElementById('lamp-dot').className = 'lamp-dot ' + type;
+    document.getElementById('lamp-text').textContent = (type==='alert') ? '⚠️ 警告中' : '監視中 (SAFE)';
   }
 
   function switchScreen(id) {
