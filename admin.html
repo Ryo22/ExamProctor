@@ -313,7 +313,7 @@
       <span class="badge-multi">Multi-Session</span>
     </div>
     <div style="display: flex; gap: 15px; align-items: center;">
-        <span id="last-poll-time" style="font-size: 0.75rem; color: var(--muted);">--</span>
+        <button class="btn btn-ghost" onclick="switchScreen('screen-setup')">⚙️ 設定に戻る</button>
         <button class="btn btn-ghost" onclick="location.reload()">再起動</button>
     </div>
   </div>
@@ -324,6 +324,11 @@
     <div class="stat" style="color:var(--green);"><span class="stat-n" id="stat-safe">0</span><span class="stat-l">正常</span></div>
     <div class="stat" style="color:var(--red);"><span class="stat-n" id="stat-alert">0</span><span class="stat-l">警告検知</span></div>
     <div class="stat" style="color:var(--orange);"><span class="stat-n" id="stat-absent">0</span><span class="stat-l">未参加</span></div>
+    <div class="stat" style="color:var(--muted);"><span class="stat-n" id="stat-finished">0</span><span class="stat-l">終了済み試験</span></div>
+    <div class="stat" style="margin-left:auto;">
+      <span class="stat-n" style="font-size:0.75rem; color:var(--muted);" id="last-poll-time">--</span>
+      <span class="stat-l">最終更新</span>
+    </div>
   </div>
 
   <div class="dash-main">
@@ -424,10 +429,15 @@
             <div class="topic-item-info">
                 <span class="topic-item-id">${t}</span>
             </div>
-            <button class="btn btn-red" onclick="removeTopic('${t}')">削除</button>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-red" style="padding: 5px 12px; font-size: 0.75rem;" onclick="removeTopic('${t}')">削除</button>
+            </div>
         </div>
     `).join('');
   }
+
+  // セッション管理用
+  let finishedTopics = new Set();
 
   // 3. ダッシュボード起動
   function startDashboard() {
@@ -471,11 +481,29 @@
         } catch(e) { console.error(e); }
     }
     updateDashboardUI();
-    document.getElementById('last-poll-time').textContent = '最終更新: ' + new Date().toLocaleTimeString();
+  }
+
+  async function terminateExam(topic) {
+    if (!confirm(`セッション ${topic} を終了しますか？\n受験者全員の画面に終了メッセージが表示されます。`)) return;
+    
+    try {
+        await fetch(`${NTFY_BASE}/${topic}`, {
+            method: 'POST',
+            body: 'FINISH:ALL:試験が終了しました',
+            headers: { 'X-Title': '試験終了通知', 'X-Priority': '4' }
+        });
+        finishedTopics.add(topic);
+        addLog(topic, 'SYSTEM', '試験を強制終了しました', new Date());
+        updateDashboardUI();
+    } catch(e) { alert('通信エラーが発生しました'); }
   }
 
   function processMessage(topic, msg) {
     const [type, sid, text] = (msg.message || '').split(':');
+    if (type === 'FINISH') {
+        finishedTopics.add(topic);
+        return;
+    }
     if (!sid || !['REGISTER', 'ALERT', 'DISMISS'].includes(type)) return;
 
     const key = `${topic}:${sid}`;
@@ -565,7 +593,11 @@
             <td>${s.alertCount}</td>
             <td>${s.lastAlert ? s.lastAlert.toLocaleTimeString() : '---'}</td>
             <td>
-                ${s.status==='alert' ? `<button class="btn btn-red" style="padding:4px 8px; font-size:0.7rem;" onclick="confirmAlert('${s.topic}','${s.sid}')">解</button>` : '---'}
+                <div style="display:flex; gap:4px;">
+                    ${s.status==='alert' ? `<button class="btn btn-red" style="padding:4px 8px; font-size:0.7rem;" onclick="confirmAlert('${s.topic}','${s.sid}')">解除</button>` : '---'}
+                    ${s.topic !== '-' && !finishedTopics.has(s.topic) ? `<button class="btn btn-ghost" style="padding:4px 8px; font-size:0.7rem;" onclick="terminateExam('${s.topic}')">終</button>` : ''}
+                    ${finishedTopics.has(s.topic) ? '<span style="color:var(--muted); font-size:0.7rem;">終了済</span>' : ''}
+                </div>
             </td>
         </tr>
     `).join('');
