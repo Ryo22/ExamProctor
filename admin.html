@@ -34,7 +34,6 @@
     .btn-green { background: var(--green); color: #000; padding: 12px; width: 100%; }
     .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 5px 12px; font-size: 0.75rem; }
     .btn-red   { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: var(--red); padding: 5px 10px; font-size: 0.75rem; }
-    .btn-orange { background: var(--orange); color: white; padding: 5px 12px; font-size: 0.75rem; }
 
     /* Setup */
     #screen-setup { align-items: center; padding: 3rem 1.5rem; }
@@ -42,46 +41,34 @@
     .topic-list { display: flex; flex-direction: column; gap: 10px; margin: 1.5rem 0; }
     .topic-item { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; align-items: center; justify-content: space-between; }
 
-    /* Dashboard Header */
+    /* Dashboard UI */
     .dash-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
     .top-scroll { background: var(--bg); padding: 1rem 1.5rem; overflow-x: auto; display: flex; gap: 1rem; border-bottom: 1px solid var(--border); }
     
-    /* Exam Cards */
     .exam-card { 
-        min-width: 250px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 15px; cursor: pointer; transition: all 0.3s; position: relative;
-        display: flex; flex-direction: column; gap: 10px;
+        min-width: 200px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; cursor: pointer; transition: all 0.2s;
     }
-    .exam-card:hover { border-color: var(--blue); transform: translateY(-2px); }
-    .exam-card.active { border-color: var(--blue); box-shadow: 0 0 15px rgba(59,130,246,0.3); }
-    .exam-card.finished { opacity: 0.6; grayscale: 1; }
-    .exam-card.finished .finish-badge { display: block; }
-    .finish-badge { position: absolute; top: 10px; right: 10px; background: var(--muted); font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; display: none; }
-    
-    .exam-name { font-weight: 800; font-size: 1rem; color: var(--blue); }
-    .exam-stats { display: flex; gap: 10px; font-size: 0.75rem; color: var(--muted); }
-    .stat-badge { background: var(--bg); padding: 2px 8px; border-radius: 99px; }
-    .stat-badge.alert { color: var(--red); background: rgba(239,68,68,0.1); }
+    .exam-card:hover { border-color: var(--blue); }
+    .exam-card.active { border-color: var(--blue); background: rgba(59,130,246,0.1); }
+    .exam-name { font-weight: 800; font-size: 0.9rem; color: var(--blue); }
 
-    /* Stats Bar */
-    .stats-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0.8rem 1.8rem; display: flex; gap: 2rem; align-items: center; }
-    .total-stat { display: flex; flex-direction: column; }
-    .ts-n { font-size: 1.8rem; font-weight: 900; }
-    .ts-l { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; }
-
-    /* Main Content */
-    .dash-main { display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; padding: 1.5rem; max-width: 1400px; margin: 0 auto; width: 100%; transition: opacity 0.3s; }
+    .dash-main { display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; padding: 1.5rem; max-width: 1400px; margin: 0 auto; width: 100%; }
     .card-v { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; }
-    .card-v h2 { font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 1rem; display: flex; justify-content: space-between; }
+    .card-v h2 { font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 1rem; }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th { background: var(--bg); color: var(--muted); font-size: 0.65rem; text-align: left; padding: 12px 15px; border-bottom: 1px solid var(--border); }
-    td { padding: 12px 15px; border-bottom: 1px solid var(--border); }
+    td, th { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }
     tr.row-alert { background: rgba(239, 68, 68, 0.05); }
 
-    .status-pill { padding: 3px 10px; border-radius: 999px; font-size: 0.73rem; font-weight: 700; }
+    .status-pill { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; }
     .status-pill.alert { background: var(--red); color: white; }
-    .status-pill.safe  { background: rgba(34,197,94,0.15); color: var(--green); }
-    .status-pill.unregistered { background: #451a03; color: #fbbf24; }
+    .status-pill.focus-lost { background: var(--orange); color: white; }
+    .status-pill.safe { background: rgba(34,197,94,0.15); color: var(--green); }
+
+    .alert-scroll { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
+    .alert-card { background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 10px; }
+
+    #toast-wrap { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
   </style>
 </head>
 <body>
@@ -89,11 +76,10 @@
 <div id="screen-login" class="screen active">
   <div class="login-card">
     <div style="font-size: 3rem;">🔐</div>
-    <h1>管理者認証</h1>
+    <h1>管理者パネル</h1>
     <div style="margin: 1.5rem 0;">
-      <input type="password" id="pw-input" placeholder="パスワードを入力" style="width:100%; padding:12px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:white;"/>
+      <input type="password" id="pw-input" placeholder="パスワードを入力" style="width:100%; padding:10px; border-radius:8px; background:var(--bg); border:1px solid var(--border); color:white;"/>
     </div>
-    <div id="pw-error" style="color:var(--red); font-size:0.8rem; margin-bottom:1rem;"></div>
     <button class="btn btn-blue" onclick="checkPassword()">ログイン</button>
   </div>
 </div>
@@ -103,308 +89,209 @@
     <h2>📅 試験セッション設定</h2>
     <div class="topic-list" id="topic-list-ui"></div>
     <div style="display: flex; gap: 10px;">
-      <input type="text" id="new-topic-input" placeholder="新しいセッション名 (例: Math-Test)" style="flex:1; background:var(--bg); border:1px solid var(--border); color:white; padding:12px; border-radius:8px;"/>
-      <button class="btn btn-blue" style="width:auto; padding:0 25px;" onclick="addTopic()">追加</button>
+      <input type="text" id="new-topic-input" placeholder="セッションコード" style="flex:1; background:var(--bg); border:1px solid var(--border); color:white; padding:10px; border-radius:8px;"/>
+      <button class="btn btn-blue" style="width:auto; padding:0 20px;" onclick="addTopic()">追加</button>
     </div>
-    <div style="margin-top: 2rem;">
-      <label style="font-size:0.7rem; color:var(--muted); font-weight:700;">共通名簿 (CSV: 番号,氏名)</label>
-      <textarea id="setup-roster" style="width:100%; height:120px; background:var(--bg); border:1px solid var(--border); color:white; padding:10px; border-radius:8px; margin-top:5px;" placeholder="2024001,田中太郎"></textarea>
+    <div style="margin-top: 1.5rem;">
+      <label style="font-size:0.7rem; color:var(--muted);">共通名簿 (学籍番号,氏名)</label>
+      <textarea id="setup-roster" style="width:100%; height:100px;" placeholder="2024001,田中太郎"></textarea>
     </div>
-    <button class="btn btn-green" style="margin-top:1.5rem;" onclick="startDashboard()">ダッシュボードを開始</button>
-    <div id="setup-error" style="color:var(--red); font-size:0.8rem; margin-top:10px;"></div>
+    <button class="btn btn-green" style="margin-top:1rem;" onclick="startDashboard()">通知を許可して監視開始</button>
   </div>
 </div>
 
 <div id="screen-dash" class="screen">
-    <div class="dash-header">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <span style="font-size:1.5rem;">🛡️</span>
-            <h1>統合監視ダッシュボード</h1>
-        </div>
-        <div style="display:flex; gap:10px;">
-            <button class="btn btn-ghost" onclick="switchScreen('screen-setup')">⚙️ 設定</button>
-            <button class="btn btn-ghost" onclick="location.reload()">再起動</button>
-        </div>
+  <div class="dash-header">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <h1>総合監視ダッシュボード</h1>
     </div>
-
-    <!-- 試験カード セクション -->
-    <div class="top-scroll" id="exam-cards-container"></div>
-
-    <div class="stats-bar">
-        <div class="total-stat"><span class="ts-n" id="stat-total">0</span><span class="ts-l">全体受験者</span></div>
-        <div class="total-stat" style="color:var(--red);"><span class="ts-n" id="stat-alert">0</span><span class="ts-l">警告中</span></div>
-        <div class="total-stat" style="margin-left:auto; text-align:right;">
-            <span id="filter-label" style="font-size:0.7rem; color:var(--blue); font-weight:700;">表示中: 全試験</span><br>
-            <span id="last-poll-time" style="font-size:0.7rem; color:var(--muted);">最終更新: --</span>
-        </div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-ghost" onclick="switchScreen('screen-setup')">⚙️ 設定</button>
+      <button class="btn btn-ghost" onclick="location.reload()">再起動</button>
     </div>
+  </div>
 
-    <div class="dash-main">
-        <div class="dash-left">
-            <div class="card-v">
-                <h2>📊 検知トレンド</h2>
-                <div style="height:200px;"><canvas id="alertChart"></canvas></div>
-            </div>
-            <div class="card-v">
-                <h2 id="table-title">👥 受験者リスト</h2>
-                <div style="overflow-x:auto;">
-                    <table>
-                        <thead>
-                            <tr><th>試験</th><th>番号</th><th>名前</th><th>ステータス</th><th>回数</th><th>最終検知</th><th>操作</th></tr>
-                        </thead>
-                        <tbody id="main-tbody"></tbody>
-                    </table>
-                </div>
-            </div>
+  <div class="top-scroll" id="exam-cards-container"></div>
+
+  <div class="dash-main">
+    <div class="dash-left">
+      <div class="card-v">
+        <h2>📊 検知トレンド</h2>
+        <div style="height:180px;"><canvas id="alertChart"></canvas></div>
+      </div>
+      <div class="card-v">
+        <h2>👥 受験生リスト <span id="filter-tag" style="font-size:0.7rem; color:var(--blue); margin-left:10px;"></span></h2>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr><th>試験</th><th>学籍番号</th><th>氏名</th><th>状態</th><th>検知</th><th>操作</th></tr>
+            </thead>
+            <tbody id="main-tbody"></tbody>
+          </table>
         </div>
-        <div class="dash-right">
-            <div class="card-v">
-                <h2>🚨 アクティブアラート</h2>
-                <div class="alert-scroll" id="active-alerts-list"></div>
-            </div>
-            <div class="card-v">
-                <h2>📝 ログ</h2>
-                <div id="log-box" style="font-size:0.7rem; color:var(--muted); max-height:300px; overflow-y:auto;"></div>
-            </div>
-        </div>
+      </div>
     </div>
+    <div class="dash-right">
+      <div class="card-v">
+        <h2>🚨 アラート</h2>
+        <div class="alert-scroll" id="active-alerts-list"></div>
+      </div>
+      <div class="card-v" style="font-size:0.7rem; height:200px; overflow-y:auto;" id="log-box"></div>
+    </div>
+  </div>
 </div>
 
 <div id="toast-wrap"></div>
 
 <script>
-  const ADMIN_PASSWORD = 'admin';
-  const NTFY_BASE      = 'https://ntfy.sh';
-  const POLL_INTERVAL  = 3000;
-
-  let activeTopics    = [];
-  let rosterData      = {};
-  let lastMessageIds  = {};
-  let studentStates   = {};
-  let finishedTopics  = new Set();
-  let filterTopic     = null;
-  let alertChart      = null;
-  let chartData       = { labels: [], datasets: [{ label: '検知', data: [], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', fill: true, tension: 0.4 }] };
+  const NTFY_BASE = 'https://ntfy.sh';
+  const POLL_INTERVAL = 3000;
+  let activeTopics = [];
+  let rosterData = {};
+  let lastMessageIds = {};
+  let studentStates = {};
+  let filterTopic = null;
+  let finishedTopics = new Set();
+  let alertChart = null;
 
   function checkPassword() {
-    if (document.getElementById('pw-input').value === ADMIN_PASSWORD) switchScreen('screen-setup');
-    else document.getElementById('pw-error').textContent = 'パスワードが違います';
+    if (document.getElementById('pw-input').value === 'admin') switchScreen('screen-setup');
   }
 
   function addTopic() {
-    const topic = document.getElementById('new-topic-input').value.trim();
-    if (topic && !activeTopics.includes(topic)) {
-        activeTopics.push(topic);
+    const t = document.getElementById('new-topic-input').value.trim();
+    if (t && !activeTopics.includes(t)) {
+        activeTopics.push(t);
         document.getElementById('new-topic-input').value = '';
         renderTopicList();
     }
   }
-  function removeTopic(t) { activeTopics = activeTopics.filter(x => x !== t); renderTopicList(); }
-
-  function getClientUrl(t) {
-    const url = new URL(location.href);
-    const path = url.pathname.replace(/\/admin(\.html)?$/, '/client.html');
-    return `${url.origin}${path}?topic=${encodeURIComponent(t)}`;
-  }
 
   function renderTopicList() {
-    const ui = document.getElementById('topic-list-ui');
-    ui.innerHTML = activeTopics.map(t => `
+    document.getElementById('topic-list-ui').innerHTML = activeTopics.map(t => `
         <div class="topic-item">
-            <div>
-                <div style="font-weight:700;">${t}</div>
-                <div style="font-size:0.6rem; color:var(--blue);">${getClientUrl(t)}</div>
-            </div>
-            <button class="btn btn-red" onclick="removeTopic('${t}')">削除</button>
+            <span>${t}</span>
+            <button class="btn btn-red" onclick="activeTopics=activeTopics.filter(x=>x!=='${t}');renderTopicList()">削除</button>
         </div>
     `).join('');
   }
 
   function startDashboard() {
     if (activeTopics.length === 0) return;
-    const raw = document.getElementById('setup-roster').value;
-    raw.split('\n').forEach(line => {
-      const parts = line.split(/[,\t]/).map(s => s.trim());
-      if (parts[0]) rosterData[parts[0]] = parts[1] || '';
+    if (Notification.permission !== 'granted') Notification.requestPermission();
+    
+    document.getElementById('setup-roster').value.split('\n').forEach(line => {
+      const p = line.split(/[,\t]/).map(s=>s.trim());
+      if (p[0]) rosterData[p[0]] = p[1] || '';
     });
     switchScreen('screen-dash');
     initChart();
     activeTopics.forEach(t => lastMessageIds[t] = 'all');
-    pollAll();
     setInterval(pollAll, POLL_INTERVAL);
+    pollAll();
   }
 
   async function pollAll() {
-    const polls = activeTopics.map(async topic => {
+    await Promise.all(activeTopics.map(async topic => {
         try {
-            const since = lastMessageIds[topic];
-            const resp = await fetch(`${NTFY_BASE}/${topic}/json?poll=1&since=${since}`);
+            const resp = await fetch(`${NTFY_BASE}/${topic}/json?poll=1&since=${lastMessageIds[topic]}`);
             if (!resp.ok) return;
             const text = await resp.text();
             text.trim().split('\n').filter(Boolean).forEach(line => {
                 const msg = JSON.parse(line);
                 if (msg.event === 'message') {
-                    processMessage(topic, msg);
                     lastMessageIds[topic] = msg.id;
+                    processMessage(topic, msg);
                 }
             });
         } catch(e) {}
-    });
-    await Promise.all(polls);
-    updateDashboardUI();
-    document.getElementById('last-poll-time').textContent = '最終更新: ' + new Date().toLocaleTimeString();
+    }));
+    updateUI();
   }
 
   function processMessage(topic, msg) {
     const parts = (msg.message || '').split(':');
-    const type = parts[0];
-    const sid = parts[1];
-    if (type === 'FINISH_SIGNAL') { finishedTopics.add(topic); return; }
-    if (!sid || !['REGISTER', 'ALERT', 'DISMISS'].includes(type)) return;
+    const type = parts[0], sid = parts[1], note = parts[2];
+    if (!sid) return;
 
     const key = `${topic}:${sid}`;
-    const ts  = new Date(msg.time * 1000);
+    const ts = new Date(msg.time * 1000);
     if (!studentStates[key]) studentStates[key] = { topic, sid, status: 'safe', alertCount: 0, lastAlert: null };
 
-    if (type === 'REGISTER') { studentStates[key].status = 'safe'; addLog(topic, sid, '開始', ts); }
-    else if (type === 'ALERT') {
-        const isNew = studentStates[key].status !== 'alert';
+    if (type === 'ALERT') {
         studentStates[key].status = 'alert';
         studentStates[key].alertCount++;
         studentStates[key].lastAlert = ts;
-        if (isNew) { showToast(topic, sid); addLog(topic, sid, '検知!', ts); updateChartWithAlert(ts); }
-    } else if (type === 'DISMISS') { studentStates[key].status = 'safe'; addLog(topic, sid, '解除', ts); }
-  }
-
-  function updateDashboardUI() {
-    const allStates = Object.values(studentStates);
-    const filteredStates = filterTopic ? allStates.filter(s => s.topic === filterTopic) : allStates;
-    
-    // 統計 (全体)
-    document.getElementById('stat-total').textContent = allStates.length;
-    document.getElementById('stat-alert').textContent = allStates.filter(s => s.status==='alert').length;
-
-    // 試験カード描画
-    const cardHtml = [`<div class="exam-card ${!filterTopic?'active':''}" onclick="setFilter(null)">
-        <div class="exam-name">全体表示</div>
-        <div class="exam-stats"><span class="stat-badge">${allStates.length} 名</span></div>
-    </div>`];
-    
-    activeTopics.forEach(t => {
-        const ts = allStates.filter(s => s.topic === t);
-        const alerts = ts.filter(s => s.status === 'alert').length;
-        const isFinished = finishedTopics.has(t);
-        cardHtml.push(`
-            <div class="exam-card ${filterTopic===t?'active':''} ${isFinished?'finished':''}" onclick="setFilter('${t}')">
-                <div class="finish-badge">終了済み</div>
-                <div class="exam-name">${t}</div>
-                <div class="exam-stats">
-                    <span class="stat-badge">${ts.length} 名</span>
-                    ${alerts > 0 ? `<span class="stat-badge alert">${alerts} 🚨</span>` : ''}
-                </div>
-                ${!isFinished ? `<button class="btn btn-orange" onclick="event.stopPropagation(); terminateExam('${t}')" style="margin-top:5px; width:100%;">試験終了</button>` : ''}
-            </div>
-        `);
-    });
-    document.getElementById('exam-cards-container').innerHTML = cardHtml.join('');
-
-    // テーブル描画
-    const tableRows = [...filteredStates];
-    if (filterTopic === null) {
-        const allSeen = new Set(allStates.map(s => s.sid));
-        Object.keys(rosterData).forEach(rsid => {
-            if(!allSeen.has(rsid)) tableRows.push({ topic:'-', sid:rsid, status:'absent', alertCount:0, lastAlert:null });
-        });
+        notifyOS(`🚨 接続検知: ${sid}`, `${topic} での通信を検知しました`);
+        addLog(topic, sid, '検知!', ts);
+    } else if (type === 'FOCUS_LOST') {
+        studentStates[key].status = 'focus-lost';
+        notifyOS(`👁️ 画面切り替え: ${sid}`, `${topic} の受験生が画面を閉じました`);
+        addLog(topic, sid, '画面離脱', ts);
+    } else if (type === 'FOCUS_GAINED') {
+        studentStates[key].status = 'safe';
+        addLog(topic, sid, '画面復帰', ts);
+    } else if (type === 'REGISTER') {
+        studentStates[key].status = 'safe';
+        addLog(topic, sid, '監視開始', ts);
+    } else if (type === 'DISMISS') {
+        studentStates[key].status = 'safe';
     }
-
-    tableRows.sort((a,b) => {
-        if (a.status==='alert' && b.status!=='alert') return -1;
-        if (b.status==='alert' && a.status!=='alert') return 1;
-        return a.sid.localeCompare(b.sid, undefined, {numeric:true});
-    });
-
-    document.getElementById('main-tbody').innerHTML = tableRows.map(s => {
-        const isUnreg = (s.status!=='absent') && !rosterData[s.sid];
-        return `
-            <tr class="${s.status==='alert'?'row-alert':''}">
-                <td style="font-size:0.7rem;">${s.topic}</td>
-                <td><strong style="${isUnreg?'color:var(--orange);':''}">${s.sid}</strong></td>
-                <td>${rosterData[s.sid] || '(未登録)'}</td>
-                <td><span class="status-pill ${isUnreg?'unregistered':s.status}">${isUnreg?'⚠️未登録':s.status.toUpperCase()}</span></td>
-                <td>${s.alertCount}</td>
-                <td>${s.lastAlert?s.lastAlert.toLocaleTimeString():'--'}</td>
-                <td>
-                    ${s.status==='alert' ? `<button class="btn btn-red" onclick="confirmAlert('${s.topic}','${s.sid}')">解除</button>` : ''}
-                </td>
-            </tr>
-        `;
-    }).join('');
-
-    // アラートリスト
-    const activeAlerts = allStates.filter(s => s.status === 'alert').sort((a,b) => b.lastAlert - a.lastAlert);
-    document.getElementById('active-alerts-list').innerHTML = activeAlerts.map(s => `
-        <div class="alert-card">
-            <div style="font-size:0.65rem; color:var(--muted);">${s.topic}</div>
-            <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-                <div><b style="color:var(--red); font-size:1.1rem;">${s.sid}</b><br><span style="font-size:0.8rem;">${rosterData[s.sid]||'--'}</span></div>
-                <button class="btn btn-red" onclick="confirmAlert('${s.topic}','${s.sid}')">解除</button>
-            </div>
-        </div>
-    `).join('');
-    
-    document.getElementById('filter-label').textContent = filterTopic ? `表示中: ${filterTopic}` : "表示中: 全試験";
   }
 
-  function setFilter(t) { filterTopic = t; updateDashboardUI(); }
+  function notifyOS(title, body) {
+    if (Notification.permission === 'granted') {
+        new Notification(title, { body });
+    }
+  }
+
+  function updateUI() {
+    const all = Object.values(studentStates);
+    const filtered = filterTopic ? all.filter(s => s.topic === filterTopic) : all;
+
+    // カード
+    let cards = `<div class="exam-card ${!filterTopic?'active':''}" onclick="filterTopic=null;updateUI()"><b>全体</b><br><small>${all.length}名</small></div>`;
+    activeTopics.forEach(t => {
+        cards += `<div class="exam-card ${filterTopic===t?'active':''}" onclick="filterTopic='${t}';updateUI()">
+            <div class="exam-name">${t}</div>
+            <small>${all.filter(s=>s.topic===t).length}名</small>
+            <button class="btn btn-red" style="padding:2px; font-size:0.6rem; width:100%; margin-top:5px;" onclick="event.stopPropagation();terminateExam('${t}')">一括終了</button>
+        </div>`;
+    });
+    document.getElementById('exam-cards-container').innerHTML = cards;
+
+    // テーブル
+    document.getElementById('main-tbody').innerHTML = filtered.sort((a,b)=>a.sid.localeCompare(b.sid, undefined, {numeric:true})).map(s => `
+        <tr class="${s.status==='alert'?'row-alert':''}">
+            <td>${s.topic}</td>
+            <td><b>${s.sid}</b></td>
+            <td>${rosterData[sid] || '(未登録)'}</td>
+            <td><span class="status-pill ${s.status}">${s.status.toUpperCase()}</span></td>
+            <td>${s.alertCount}</td>
+            <td><button class="btn btn-ghost" onclick="studentStates['${s.topic}:${s.sid}'].status='safe';updateUI()">解除</button></td>
+        </tr>
+    `).join('');
+
+    // アラート
+    document.getElementById('active-alerts-list').innerHTML = all.filter(s=>s.status==='alert').map(s=>`
+        <div class="alert-card"><b>${s.sid}</b> (${s.topic})<br><small>${s.lastAlert.toLocaleTimeString()}</small></div>
+    `).join('');
+  }
 
   async function terminateExam(topic) {
-    if (!confirm(`${topic} を終了しますか？\n受験者全員に終了メッセージを送信します。`)) return;
-    try {
-        const ts = Math.floor(Date.now()/1000);
-        await fetch(`${NTFY_BASE}/${topic}`, { 
-            method: 'POST', 
-            body: `FINISH_SIGNAL:${ts}:EXAM_END`, 
-            headers: { 'X-Priority': '4' } 
-        });
+    if (confirm(`${topic} を終了させますか？`)) {
+        await fetch(`${NTFY_BASE}/${topic}`, { method:'POST', body:'FINISH_ALL' });
         finishedTopics.add(topic);
-        addLog(topic, 'SYSTEM', '試験を終了しました', new Date());
-        updateDashboardUI();
-    } catch(e) { alert('通信エラー'); }
-  }
-
-  function confirmAlert(topic, sid) {
-    const key = `${topic}:${sid}`;
-    if (studentStates[key]) { studentStates[key].status = 'safe'; updateDashboardUI(); }
+    }
   }
 
   function initChart() {
-    const ctx = document.getElementById('alertChart').getContext('2d');
-    alertChart = new Chart(ctx, { type:'line', data:chartData, options:{ responsive:true, maintainAspectRatio:false, scales:{ x:{grid:{display:false}}, y:{beginAtZero:true,ticks:{stepSize:1}} }, plugins:{legend:{display:false}} } });
+    alertChart = new Chart(document.getElementById('alertChart'), { type:'line', data:{ labels:[], datasets:[{data:[],borderColor:'#ef4444',label:'検知'}] }, options:{responsive:true,maintainAspectRatio:false} });
   }
 
-  function updateChartWithAlert(ts) {
-    const label = ts.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
-    const idx = chartData.labels.indexOf(label);
-    if (idx>=0) chartData.datasets[0].data[idx]++;
-    else { chartData.labels.push(label); chartData.datasets[0].data.push(1); if(chartData.labels.length>20){chartData.labels.shift(); chartData.datasets[0].data.shift();} }
-    alertChart.update();
-  }
-
-  function addLog(t, sid, action, ts) {
+  function addLog(t, s, a, ts) {
     const log = document.getElementById('log-box');
-    const div = document.createElement('div');
-    div.innerHTML = `<span style="color:var(--muted)">[${ts.toLocaleTimeString()}]</span> <b>${t}</b>:${sid} → ${action}`;
-    log.prepend(div);
-  }
-
-  function showToast(t, sid) {
-    const wrap = document.getElementById('toast-wrap');
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.innerHTML = `🚨 <b>検知</b>: ${t} - ${sid}`;
-    wrap.appendChild(toast);
-    if (Notification.permission==='granted') new Notification('🚨 接続検知', { body:`${t} / ${sid}` });
-    setTimeout(() => { toast.remove(); }, 5000);
+    log.innerHTML = `<div>[${ts.toLocaleTimeString()}] ${t}:${s} → ${a}</div>` + log.innerHTML;
   }
 
   function switchScreen(id) {
