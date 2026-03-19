@@ -87,23 +87,58 @@
     let SID = params.get('sid');
     const NTFY_BASE = 'https://ntfy.sh';
 
-    // 初期表示設定
     if (TOPIC) document.getElementById('input-topic').value = TOPIC;
     if (SID) document.getElementById('input-sid').value = SID;
 
     let isAlert = false;
     let monitoringActive = false;
 
-    async function sendEvent(type) {
-        if (!TOPIC) return;
-        try {
-            await fetch(`${NTFY_BASE}/${TOPIC}`, {
-                method: 'POST',
-                body: `${type}:${SID}`,
-                headers: { 'Title': 'Exam Security Notification' }
-            });
-        } catch (e) { console.error(e); }
+    // --- 【修正部分】送信キューとリトライロジック ---
+    let eventQueue =[];
+    let isSending = false;
+
+    // 即座にfetchせず、一旦キューに保存する
+    function sendEvent(type) {
+        if (!TOPIC || !SID) return;
+        eventQueue.push(`${type}:${SID}`);
+        processQueue(); // 送信を試みる
     }
+
+    // キューの内容を順次送信する（通信が通るまでリトライする）
+    async function processQueue() {
+        // 送信中、キューが空、またはブラウザがオフライン認識の場合は中断
+        if (isSending || eventQueue.length === 0 || !navigator.onLine) return;
+        isSending = true;
+
+        while (eventQueue.length > 0) {
+            const payload = eventQueue[0];
+            try {
+                const response = await fetch(`${NTFY_BASE}/${TOPIC}`, {
+                    method: 'POST',
+                    body: payload,
+                    headers: { 'Title': 'Exam Security Notification' }
+                });
+                
+                if (response.ok) {
+                    // 送信に成功したらキューから削除
+                    eventQueue.shift();
+                } else {
+                    // サーバーエラーの場合は一旦ループを抜けて次回再試行
+                    break;
+                }
+            } catch (e) {
+                // 通信確立前の Network Error はここでキャッチされる
+                // キューに残したままループを抜け、数秒後に自動リトライする
+                console.warn('通信未確立のためリトライ待機中...', e);
+                break;
+            }
+            // 連続送信を避けるためのわずかなインターバル
+            await new Promise(r => setTimeout(r, 500));
+        }
+        
+        isSending = false;
+    }
+    // ------------------------------------------------
 
     function startProctoring() {
         TOPIC = document.getElementById('input-topic').value.trim();
@@ -127,6 +162,8 @@
         
         // 監視のインターバル
         setInterval(checkConnection, 3000);
+        // 【追加】定期的に未送信キューの処理を試みる（通信復帰時にまとめて送るため）
+        setInterval(processQueue, 3000);
     }
 
     function updateUI(status) {
@@ -159,7 +196,7 @@
         if (navigator.onLine) {
             if (!isAlert) {
                 isAlert = true;
-                sendEvent('ALERT');
+                sendEvent('ALERT'); // ここでキューに入る
                 updateUI('ALERT');
             }
         } else {
