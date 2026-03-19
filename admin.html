@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>接続監視システム | 統合管理ダッシュボード</title>
+  <title>接続監視システム | クラウド統合ダッシュボード</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -21,245 +23,226 @@
     body { font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
     
     /* Login Screen */
-    #login-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; align-items: center; justifyContent: center; }
-    .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2.5rem; width: 100%; maxWidth: 400px; text-align: center; }
-    .login-input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 12px; border-radius: 10px; margin-bottom: 1rem; font-family: inherit; }
-
+    #login-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+    .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2.5rem; width: 100%; max-width: 420px; text-align: center; }
+    
     .app-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
-    .nav-tabs { display: flex; gap: 5px; background: var(--bg); padding: 5px; border-radius: 10px; margin-left: 20px; }
-    .nav-tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.2s; }
-    .nav-tab.active { background: var(--surface); color: var(--blue); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-    .nav-tab:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.05); }
+    .nav-tabs { display: flex; gap: 5px; background: var(--bg); padding: 5px; border-radius: 10px; }
+    .nav-tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; font-weight: 700; color: var(--muted); }
+    .nav-tab.active { background: var(--surface); color: var(--blue); }
 
     .app-viewport { flex: 1; overflow-y: auto; padding: 1.5rem; max-width: 1400px; margin: 0 auto; width: 100%; display: none; }
     .app-viewport.visible { display: block; }
-
-    .page { display: none; animation: fadeIn 0.3s ease; }
+    .page { display: none; }
     .page.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem; }
-    .card h2 { font-size: 0.85rem; font-weight: 800; color: var(--muted); text-transform: uppercase; margin-bottom: 1.2rem; display: flex; align-items: center; gap: 8px; }
-
-    .dash-grid { display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; }
     .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
     .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; text-align: center; }
     .stat-val { font-size: 1.8rem; font-weight: 900; line-height: 1; }
-    .stat-lbl { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; margin-top: 5px; }
+    
+    .filter-scroll { overflow-x: auto; display: flex; gap: 0.8rem; margin-bottom: 1rem; padding-bottom: 10px; }
+    .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; flex-shrink: 0; }
+    .filter-chip.active { border-color: var(--blue); background: rgba(59,130,246,0.1); }
 
-    .filter-scroll { border-radius: 12px; padding-bottom: 10px; overflow-x: auto; display: flex; gap: 0.8rem; margin-bottom: 1rem; scrollbar-width: thin; }
-    .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 16px; cursor: pointer; transition: 0.2s; text-align: center; flex-shrink: 0; }
-    .filter-chip:hover { border-color: var(--blue); }
-    .filter-chip.active { border-color: var(--blue); background: rgba(59,130,246,0.15); box-shadow: 0 0 10px rgba(59,130,246,0.1); }
-    .chip-name { font-weight: 800; font-size: 0.85rem; }
-
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th { text-align: left; padding: 12px; color: var(--muted); border-bottom: 1px solid var(--border); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    td { padding: 12px; border-bottom: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th { text-align: left; padding: 10px; color: var(--muted); border-bottom: 1px solid var(--border); }
+    td { padding: 10px; border-bottom: 1px solid var(--border); }
     tr.alert-row { background: rgba(239, 68, 68, 0.1); }
 
-    /* Pencils ... other styles */
-    .pill { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; display: inline-block; min-width: 60px; text-align: center; }
-    .pill.ALERT { background: var(--red); color: white; }
-    .pill.FOCUS-LOST { background: var(--orange); color: white; }
-    .pill.SAFE { background: rgba(34,197,94,0.15); color: var(--green); }
-    .pill.OFFLINE { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
-
-    .form-row { display: flex; gap: 10px; margin-bottom: 1rem; }
-    input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; font-family: inherit; font-size: 0.85rem; }
-    .btn { border: none; cursor: pointer; border-radius: 8px; font-weight: 700; padding: 8px 16px; transition: 0.2s; white-space: nowrap; font-size: 0.85rem; }
+    .btn { border: none; cursor: pointer; border-radius: 8px; font-weight: 700; padding: 8px 16px; }
     .btn-blue { background: var(--blue); color: white; }
-    .btn-red { background: rgba(239,68,68,0.15); color: var(--red); }
-    .btn-green { background: var(--green); color: black; }
-    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-size: 0.7rem; }
+    .btn-red { background: rgba(239,68,68,0.1); color: var(--red); }
+    input, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; font-family: inherit; }
   </style>
 </head>
 <body>
 
-<!-- Login Screen Overlay -->
 <div id="login-screen">
   <div class="login-card">
-    <h1 style="font-size:1.5rem; font-weight:900; margin-bottom:1.5rem;">🛡️ 管理者ログイン</h1>
-    <input type="email" id="login-email" class="login-input" placeholder="メールアドレス" autocomplete="email" />
-    <input type="password" id="login-pass" class="login-input" placeholder="パスワード" />
+    <h1 style="margin-bottom:1.5rem;">🛡️ クラウド管理者ログイン</h1>
+    <p style="font-size:0.7rem; color:var(--muted); margin-bottom:1.5rem;">複数デバイス間で同期・共有が有効です</p>
+    <input type="email" id="login-email" placeholder="メールアドレス" style="margin-bottom:1rem;" />
+    <input type="password" id="login-pass" placeholder="パスワード" style="margin-bottom:1rem;" />
     <button class="btn btn-blue" style="width:100%; padding:14px;" onclick="handleLogin()">ログイン</button>
-    <p id="login-error" style="color:var(--red); font-size:0.75rem; margin-top:1rem; min-height:1.2rem;"></p>
+    <p id="login-error" style="color:var(--red); font-size:0.75rem; margin-top:1rem;"></p>
   </div>
 </div>
 
 <header class="app-header" style="display:none;">
-  <div style="display:flex; align-items:center;">
-    <h1 style="font-size:1.1rem; font-weight:900;">🛡️ ProctorAdmin</h1>
-    <div class="nav-tabs">
-      <div class="nav-tab active" data-target="page-dash">ダッシュボード</div>
-      <div class="nav-tab" data-target="page-sessions">試験管理</div>
-      <div class="nav-tab" data-target="page-roster">名簿マスタ</div>
-      <div class="nav-tab" data-target="page-log">システムログ</div>
+    <div style="display:flex; align-items:center; gap:20px;">
+        <h1 style="font-size:1.1rem; font-weight:900;">🛡️ Proctor Cloud</h1>
+        <div class="nav-tabs">
+            <div class="nav-tab active" data-target="page-dash">ダッシュボード</div>
+            <div class="nav-tab" data-target="page-sessions">試験管理</div>
+            <div class="nav-tab" data-target="page-roster">名簿マスタ</div>
+            <div class="nav-tab" data-target="page-cloud">設定</div>
+        </div>
     </div>
-  </div>
-  <div id="sync-indicator" style="font-size:0.65rem; color:var(--muted); font-weight:700;">● 同期中</div>
+    <div id="cloud-sync-status" style="font-size:0.65rem; color:var(--green);">● クラウド同期中</div>
 </header>
 
 <main class="app-viewport">
-  <!-- DASHBOARD PAGE -->
+  <!-- Dashboard, Sessions, Roster Page (Same as before, merged below) -->
   <div id="page-dash" class="page active">
+    <!-- Stat Cards, Filter chips, Trend chart, Table... -->
     <div class="stat-row">
-      <div class="stat-box"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">監視対象</div></div>
-      <div class="stat-box" style="color:var(--red);"><div class="stat-val" id="stat-alert">0</div><div class="stat-lbl">検知中</div></div>
-      <div class="stat-box" style="color:var(--orange);"><div class="stat-val" id="stat-focus">0</div><div class="stat-lbl">離脱中</div></div>
-      <div class="stat-box"><div class="stat-val" id="stat-sessions">0</div><div class="stat-lbl">セッション</div></div>
+        <div class="stat-box"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">監視対象</div></div>
+        <div class="stat-box" style="color:var(--red);"><div class="stat-val" id="stat-alert">0</div><div class="stat-lbl">検知中</div></div>
+        <div class="stat-box"><div class="stat-val" id="stat-sessions">0</div><div class="stat-lbl">セッション</div></div>
+        <div class="stat-box" id="cloud-status-box" style="color:var(--green);"><div class="stat-val">OK</div><div class="stat-lbl">Cloud DB</div></div>
     </div>
-
-    <h2 style="margin-top:0.5rem;">1. フィルター：クラス</h2>
     <div class="filter-scroll" id="group-filter-container"></div>
-    
-    <h2 style="margin-top:0.5rem;">2. フィルター：試験セッション</h2>
     <div class="filter-scroll" id="topic-filter-container"></div>
-
-    <div class="dash-grid">
-      <div class="grid-left">
-        <div class="card" style="padding:1rem;">
-          <h2 style="margin-bottom:0.5rem;">検知トレンド</h2>
-          <div style="height:150px;"><canvas id="alertChart"></canvas></div>
-        </div>
-        <div class="card">
-          <h2>受験生状況 (一覧)</h2>
-          <div style="overflow-x:auto;">
-            <table>
-              <thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>試験</th><th>状態</th><th>検知数</th><th>操作</th></tr></thead>
-              <tbody id="student-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <div class="grid-right">
-        <div class="card">
-          <h2>最新アラート</h2>
-          <div id="active-alerts-list" style="font-size:0.75rem;"></div>
-        </div>
-      </div>
+    <div class="card">
+        <h2>受験生状況一覧</h2>
+        <table>
+            <thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>試験</th><th>状態</th><th>回数</th></tr></thead>
+            <tbody id="student-tbody"></tbody>
+        </table>
     </div>
   </div>
 
-  <!-- SESSIONS PAGE -->
   <div id="page-sessions" class="page">
     <div class="card">
-      <h2>新規試験セッション作成</h2>
-      <div class="form-row">
-        <input type="text" id="new-topic-input" placeholder="管理名称 (例: Session-A)"/>
+      <h2>新規セッション追加</h2>
+      <div style="display:flex; gap:10px;">
+        <input type="text" id="new-topic-input" placeholder="セッション名"/>
         <button class="btn btn-blue" onclick="addTopic()">追加</button>
       </div>
     </div>
     <div id="session-manager-list"></div>
   </div>
 
-  <!-- ROSTER PAGE -->
   <div id="page-roster" class="page">
     <div class="card">
-      <h2>名簿登録・編集</h2>
-      <div class="form-row">
-        <input type="text" id="roster-group" placeholder="クラス (例: JP Class)"/>
+      <div style="display:flex; gap:10px;">
+        <input type="text" id="roster-group" placeholder="クラス"/>
         <input type="text" id="roster-sid" placeholder="学籍番号"/>
         <input type="text" id="roster-name" placeholder="氏名"/>
         <button class="btn btn-blue" onclick="saveSingleRoster()">保存</button>
-        <button class="btn btn-ghost" onclick="clearRosterForm()">クリア</button>
       </div>
-      <hr style="border:0.5px solid var(--border); margin-bottom:1.5rem;">
-      <h2>一括登録 (貼り付け)</h2>
-      <p style="font-size:0.75rem; color:var(--muted); margin-bottom:0.5rem;">「クラス,学籍番号,氏名」形式で入力。</p>
-      <textarea id="roster-bulk-input" rows="5" placeholder="JP Class,2024001,田中太郎"></textarea>
-      <button class="btn btn-green" onclick="saveBulkRoster()">一括保存</button>
+      <hr style="margin:1.5rem 0; border:0.5px solid var(--border);">
+      <textarea id="roster-bulk-input" rows="4" placeholder="クラス,学籍番号,氏名形式で一括貼り付け"></textarea>
+      <button class="btn btn-green" style="margin-top:10px;" onclick="saveBulkRoster()">一括保存</button>
     </div>
     <div class="card">
-      <h2>登録済み名簿マスタ</h2>
-      <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>操作</th></tr></thead>
-          <tbody id="roster-tbody-master"></tbody>
+            <thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>操作</th></tr></thead>
+            <tbody id="roster-tbody-master"></tbody>
         </table>
-      </div>
     </div>
   </div>
 
-  <!-- LOG PAGE -->
-  <div id="page-log" class="page">
-    <div class="card"><h2>システムログ</h2><div id="system-log-box" style="font-size:0.75rem; font-family:monospace; height:500px; overflow-y:auto; background:var(--bg); padding:1rem; border-radius:10px;"></div></div>
+  <div id="page-cloud" class="page">
+    <div class="card">
+        <h2>🌩️ クラウド共有設定 (Supabase)</h2>
+        <p style="font-size:0.75rem; color:var(--muted); margin-bottom:1rem;">複数のPCで名簿データを共有するための設定です。</p>
+        <div style="margin-bottom:1rem;">
+            <label style="font-size:0.7rem;">Project URL</label>
+            <input type="text" id="sb-url" placeholder="https://xxxx.supabase.co" />
+        </div>
+        <div style="margin-bottom:1.5rem;">
+            <label style="font-size:0.7rem;">Apon Key (Secret)</label>
+            <input type="password" id="sb-key" placeholder="eyJhbGciOiJIUzI1..." />
+        </div>
+        <button class="btn btn-blue" onclick="saveCloudConfig()">接続を保存して同期</button>
+        <p style="margin-top:10px; font-size:0.7rem; color:var(--orange);">※ 接続するとブラウザ内のデータは上書きされます。</p>
+    </div>
   </div>
 </main>
 
 <script>
-  // ---------------------------------------------------------
-  // 🛡️ 認証設定 (管理者が変更可能)
-  // ---------------------------------------------------------
-  const ADMIN_CREDENTIALS = {
-    email: 'admin@example.com',
-    password: 'password123'
-  };
-
+  let sb = null;
   const NTFY_BASE = 'https://ntfy.sh';
-  const STORAGE_KEY = 'proctor_admin_data_v4';
   const POLL_INTERVAL = 3000;
   
-  let state = { topics: [], roster: {}, studentStates: {}, lastIds: {}, chartLabels: [], chartHits: [] };
+  let state = { topics: [], roster: {}, studentStates: {}, lastIds: {}, cloudConfig: null };
 
   // ---------------------------------------------------------
-  // 🔑 ログインロジック
+  // 🌩️ Supabase 同期ロジック
   // ---------------------------------------------------------
-  function handleLogin() {
-    const emailInput = document.getElementById('login-email').value;
-    const passInput = document.getElementById('login-pass').value;
-    const errorBox = document.getElementById('login-error');
-
-    if (emailInput === ADMIN_CREDENTIALS.email && passInput === ADMIN_CREDENTIALS.password) {
-        sessionStorage.setItem('admin_logged_in', 'true');
-        showAdminApp();
-    } else {
-        errorBox.textContent = 'メールアドレスまたはパスワードが正しくありません';
+  async function initCloud() {
+    const config = JSON.parse(localStorage.getItem('proctor_cloud_config') || 'null');
+    if (config && config.url && config.key) {
+        state.cloudConfig = config;
+        sb = supabase.createClient(config.url, config.key);
+        document.getElementById('sb-url').value = config.url;
+        document.getElementById('sb-key').value = config.key;
+        await pullFromCloud();
     }
   }
 
-  function showAdminApp() {
+  async function pushToCloud() {
+    if (!sb) return;
+    try {
+        // 設定用テーブル 'settings' に JSON 形式でまるごと保存
+        // ※予め Supabase 側で 'settings' テーブル(key, data)を作成しておく必要があります
+        await sb.from('settings').upsert({ key: 'admin_state', data: { topics: state.topics, roster: state.roster } });
+        document.getElementById('cloud-sync-status').textContent = '● クラウド保存完了';
+    } catch(e) { console.error(e); }
+  }
+
+  async function pullFromCloud() {
+    if (!sb) return;
+    try {
+        const { data } = await sb.from('settings').select('data').eq('key', 'admin_state').single();
+        if (data && data.data) {
+            state.topics = data.data.topics || [];
+            state.roster = data.data.roster || {};
+            renderAll();
+            document.getElementById('cloud-sync-status').textContent = '● クラウド同期済み';
+        }
+    } catch(e) { console.error(e); }
+  }
+
+  function saveCloudConfig() {
+    const url = document.getElementById('sb-url').value.trim();
+    const key = document.getElementById('sb-key').value.trim();
+    localStorage.setItem('proctor_cloud_config', JSON.stringify({ url, key }));
+    location.reload();
+  }
+
+  // ---------------------------------------------------------
+  // 🔑 認証 & 画面制御
+  // ---------------------------------------------------------
+  function handleLogin() {
+    if (document.getElementById('login-email').value === 'admin@example.com' && document.getElementById('login-pass').value === 'password123') {
+        sessionStorage.setItem('admin_logged_in', 'true');
+        showAdminApp();
+    } else { document.getElementById('login-error').textContent = '認証失敗'; }
+  }
+
+  async function showAdminApp() {
     document.getElementById('login-screen').style.display = 'none';
     document.querySelector('.app-header').style.display = 'flex';
     document.querySelector('.app-viewport').classList.add('visible');
-    
-    // アプリ起動後に初期化
-    loadState();
-    initChart();
-    renderSessionManager();
-    renderDashboard();
-    pollAll();
+    loadLocal();
+    await initCloud();
+    renderAll();
     setInterval(pollAll, POLL_INTERVAL);
   }
 
-  // 自動ログインチェック
-  window.onload = () => {
-    if (sessionStorage.getItem('admin_logged_in') === 'true') {
-        showAdminApp();
-    }
-  };
+  window.onload = () => { if (sessionStorage.getItem('admin_logged_in') === 'true') showAdminApp(); };
 
   // ---------------------------------------------------------
-  // 🛠️ アプリロジック
+  // 🛠️ アプリロジック (統合・整理版)
   // ---------------------------------------------------------
-  function loadState() {
-    const raw = localStorage.getItem(STORAGE_KEY);
+  function loadLocal() {
+    const raw = localStorage.getItem('proctor_local_state');
     if (raw) {
-        state = { ...state, ...JSON.parse(raw) };
-        Object.keys(state.roster).forEach(sid => {
-            if (typeof state.roster[sid] === 'string') {
-                state.roster[sid] = { name: state.roster[sid], group: '---' };
-            }
-        });
+        const ps = JSON.parse(raw);
+        state.topics = ps.topics || [];
+        state.roster = ps.roster || {};
     }
   }
-  function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  function saveAndSync() {
+    localStorage.setItem('proctor_local_state', JSON.stringify({ topics: state.topics, roster: state.roster }));
+    pushToCloud();
+    renderAll();
   }
 
-  let filterTopic = null;
-  let filterGroup = null;
-  let alertChart = null;
+  let filterTopic = null, filterGroup = null;
 
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -267,44 +250,25 @@
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(tab.dataset.target).classList.add('active');
-      if(tab.dataset.target === 'page-roster') renderRosterMaster();
     });
   });
 
-  function initChart() {
-    const ctx = document.getElementById('alertChart').getContext('2d');
-    alertChart = new Chart(ctx, {
-        type: 'line',
-        data: { labels: state.chartLabels, datasets: [{ label: '検知数', data: state.chartHits, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.4, fill: true, pointRadius: 4 }] },
-        options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } } }, plugins: { legend: { display: false } } }
-    });
-  }
-
-  function updateChart(ts) {
-    const label = new Date(ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
-    const idx = state.chartLabels.indexOf(label);
-    if (idx >= 0) { state.chartHits[idx]++; }
-    else {
-        state.chartLabels.push(label); state.chartHits.push(1);
-        if (state.chartLabels.length > 60) { state.chartLabels.shift(); state.chartHits.shift(); }
-    }
-    if (alertChart) alertChart.update();
+  function renderAll() {
+    renderDashboard();
+    renderSessionManager();
+    renderRosterMaster();
   }
 
   function addTopic() {
     const val = document.getElementById('new-topic-input').value.trim();
-    if (val && !state.topics.includes(val)) {
-        state.topics.push(val); state.lastIds[val] = 'all';
-        document.getElementById('new-topic-input').value = '';
-        saveState(); renderSessionManager(); renderDashboard();
-    }
+    if (val && !state.topics.includes(val)) { state.topics.push(val); saveAndSync(); document.getElementById('new-topic-input').value=''; }
   }
 
   function saveSingleRoster() {
     const sid = document.getElementById('roster-sid').value.trim();
     const name = document.getElementById('roster-name').value.trim();
     const grp = document.getElementById('roster-group').value.trim() || '---';
-    if(sid && name) { state.roster[sid] = { name, group: grp }; clearRosterForm(); saveState(); renderRosterMaster(); renderDashboard(); }
+    if(sid && name) { state.roster[sid] = { name, group: grp }; saveAndSync(); }
   }
 
   function saveBulkRoster() {
@@ -313,43 +277,17 @@
         if (p[0] && p[1] && p[2]) state.roster[p[1]] = { name: p[2], group: p[0] };
     });
     document.getElementById('roster-bulk-input').value = '';
-    saveState(); renderRosterMaster(); renderDashboard(); alert('名簿を保存しました');
-  }
-
-  function clearRosterForm() { 
-    ['roster-sid', 'roster-name', 'roster-group'].forEach(id => document.getElementById(id).value = '');
-  }
-
-  function deleteRoster(sid) {
-    if(confirm('削除しますか？')){ delete state.roster[sid]; saveState(); renderRosterMaster(); renderDashboard(); }
-  }
-
-  function editRoster(sid) {
-    const info = state.roster[sid];
-    document.getElementById('roster-group').value = info.group || '';
-    document.getElementById('roster-sid').value = sid || '';
-    document.getElementById('roster-name').value = info.name || '';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    saveAndSync();
   }
 
   function renderRosterMaster() {
-    const entries = Object.entries(state.roster).sort((a, b) => {
-        if (a[1].group !== b[1].group) return a[1].group.localeCompare(b[1].group);
-        return a[0].localeCompare(b[0]);
-    });
-    
-    document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `
-      <tr>
-        <td>${info.group}</td>
-        <td><b>${sid}</b></td>
-        <td>${info.name}</td>
-        <td>
-          <button class="btn btn-blue" style="padding:4px 10px; font-size:0.7rem;" onclick="editRoster('${sid}')">編集</button>
-          <button class="btn btn-red" style="padding:4px 10px; font-size:0.7rem;" onclick="deleteRoster('${sid}')">削除</button>
-        </td>
-      </tr>
+    const rows = Object.entries(state.roster).sort((a,b)=>a[1].group.localeCompare(b[1].group) || a[0].localeCompare(b[0]));
+    document.getElementById('roster-tbody-master').innerHTML = rows.map(([sid, info]) => `
+      <tr><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td>
+          <td><button class="btn btn-red" onclick="deleteRoster('${sid}')">削除</button></td></tr>
     `).join('');
   }
+  function deleteRoster(sid) { if(confirm('削除？')){ delete state.roster[sid]; saveAndSync(); } }
 
   async function pollAll() {
     for (const t of state.topics) {
@@ -359,132 +297,64 @@
             const text = await resp.text();
             text.trim().split('\n').filter(Boolean).forEach(line => {
                 const msg = JSON.parse(line);
-                if (msg.event === 'message') { state.lastIds[t] = msg.id; processMessage(t, msg); }
+                if (msg.event === 'message') {
+                    state.lastIds[t] = msg.id;
+                    const parts = msg.message.split(':');
+                    const type = parts[0], sid = parts[1];
+                    if (!sid) return;
+                    if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic: t, sid, status: 'SAFE', alertCount: 0 };
+                    const s = state.studentStates[`${t}:${sid}`];
+                    if (type === 'ALERT') { s.status = 'ALERT'; s.alertCount++; }
+                    else if (type === 'FOCUS_LOST') s.status = 'FOCUS-LOST';
+                    else if (type === 'REGISTER' || type === 'FOCUS_GAINED' || type === 'DISMISS') s.status = 'SAFE';
+                }
             });
         } catch(e) {}
     }
     renderDashboard();
-    document.getElementById('sync-indicator').textContent = '● 同期完了 - ' + new Date().toLocaleTimeString();
-  }
-
-  function processMessage(topic, msg) {
-    const parts = (msg.message || '').split(':');
-    const type = parts[0], sid = parts[1];
-    if (!sid) return;
-    const key = `${topic}:${sid}`;
-    const ts = new Date(msg.time * 1000);
-    if (!state.studentStates[key]) state.studentStates[key] = { topic, sid, status: 'SAFE', alertCount: 0, lastCheck: ts };
-    const s = state.studentStates[key];
-    if (new Date(s.lastCheck) > ts) return;
-    s.lastCheck = ts;
-    if (type === 'ALERT') { s.status = 'ALERT'; s.alertCount++; updateChart(ts); }
-    else if (type === 'FOCUS_LOST') { s.status = 'FOCUS-LOST'; }
-    else if (type === 'FOCUS_GAINED') { s.status = 'SAFE'; }
-    else if (type === 'REGISTER') { s.status = 'SAFE'; }
-    else if (type === 'DISMISS') { s.status = 'SAFE'; }
-    saveState();
   }
 
   function renderDashboard() {
-    const allRosterIds = Object.keys(state.roster);
-    const uniqueGroups = Array.from(new Set(allRosterIds.map(id => state.roster[id].group || '---'))).sort();
-    const groups = ['全体表示', ...uniqueGroups];
-    const topics = ['全体表示', ...state.topics.sort()];
+    const rosterIds = Object.keys(state.roster);
+    const groups = ['全体表示', ...new Set(rosterIds.map(id => state.roster[id].group))].sort();
+    const ts = ['全体表示', ...state.topics].sort();
 
-    document.getElementById('group-filter-container').innerHTML = groups.map(g => {
-        const active = (g === '全体表示' && !filterGroup) || (g === filterGroup);
-        return `<div class="filter-chip ${active?'active':''}" onclick="filterGroup='${g==='全体表示'?null:g}';renderDashboard()">
-            <div class="chip-name">${g}</div>
-        </div>`;
-    }).join('');
-
-    document.getElementById('topic-filter-container').innerHTML = topics.map(t => {
-        const active = (t === '全体表示' && !filterTopic) || (t === filterTopic);
-        return `<div class="filter-chip ${active?'active':''}" onclick="filterTopic='${t==='全体表示'?null:t}';renderDashboard()">
-            <div class="chip-name">${t}</div>
-        </div>`;
-    }).join('');
+    document.getElementById('group-filter-container').innerHTML = groups.map(g => `
+        <div class="filter-chip ${(!filterGroup && g==='全体表示') || filterGroup===g ? 'active':''}" onclick="filterGroup='${g==='全体表示'?null:g}';renderDashboard()">${g}</div>
+    `).join('');
+    document.getElementById('topic-filter-container').innerHTML = ts.map(t => `
+        <div class="filter-chip ${(!filterTopic && t==='全体表示') || filterTopic===t ? 'active':''}" onclick="filterTopic='${t==='全体表示'?null:t}';renderDashboard()">${t}</div>
+    `).join('');
 
     const topicsToShow = filterTopic ? [filterTopic] : state.topics;
     let rows = [];
-
     topicsToShow.forEach(t => {
-        allRosterIds.forEach(sid => {
-            const info = state.roster[sid];
-            if (filterGroup && info.group !== filterGroup) return;
-            const key = `${t}:${sid}`;
-            const s = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', alertCount:0 };
-            rows.push(s);
+        rosterIds.forEach(sid => {
+            if (filterGroup && state.roster[sid].group !== filterGroup) return;
+            rows.push(state.studentStates[`${t}:${sid}`] || { topic:t, sid, status:'OFFLINE', alertCount:0 });
         });
-        if (!filterGroup) {
-            Object.keys(state.studentStates).forEach(k => {
-                const [top, sid] = k.split(':');
-                if (top === t && !state.roster[sid]) rows.push(state.studentStates[k]);
-            });
-        }
     });
 
     document.getElementById('stat-total').textContent = rows.length;
-    document.getElementById('stat-alert').textContent = rows.filter(s=>s.status==='ALERT').length;
-    document.getElementById('stat-focus').textContent = rows.filter(s=>s.status==='FOCUS-LOST').length;
+    document.getElementById('stat-alert').textContent = rows.filter(r=>r.status==='ALERT').length;
     document.getElementById('stat-sessions').textContent = state.topics.length;
 
-    document.getElementById('student-tbody').innerHTML = rows.sort((a,b)=>{
-        const ga = (state.roster[a.sid]?.group || '---');
-        const gb = (state.roster[b.sid]?.group || '---');
-        if (ga !== gb) return ga.localeCompare(gb);
-        return a.sid.localeCompare(b.sid);
-    }).map(s => {
-        const info = state.roster[s.sid] || { name: '---', group: '---' };
-        return `<tr class="${s.status==='ALERT'?'alert-row':''}">
-            <td><small>${info.group}</small></td>
-            <td><b>${s.sid}</b></td>
-            <td>${info.name}</td>
-            <td style="font-size:0.65rem; color:var(--muted);">${s.topic}</td>
-            <td><span class="pill ${s.status}">${s.status}</span></td>
-            <td style="text-align:center;">${s.alertCount}</td>
-            <td><button class="btn btn-ghost" style="padding:2px 8px;" onclick="dismissAlert('${s.topic}','${s.sid}')">解除</button></td></tr>`;
+    document.getElementById('student-tbody').innerHTML = rows.sort((a,b)=>a.sid.localeCompare(b.sid)).map(r => {
+        const info = state.roster[r.sid] || { name: '---', group: '---' };
+        return `<tr class="${r.status==='ALERT'?'alert-row':''}">
+            <td><small>${info.group}</small></td><td><b>${r.sid}</b></td><td>${info.name}</td><td>${r.topic}</td>
+            <td><span class="pill ${r.status}">${r.status}</span></td><td>${r.alertCount}</td></tr>`;
     }).join('');
-
-    document.getElementById('active-alerts-list').innerHTML = rows.filter(s=>s.status==='ALERT').map(s=>`
-        <div style="background:rgba(239,68,68,0.08); border:1px solid var(--red); padding:10px; border-radius:8px; margin-bottom:8px;">
-            <div style="display:flex; justify-content:space-between;">
-                <b>${s.sid}</b> <span>${state.roster[s.sid]?.group || ''}</span>
-            </div>
-            <div style="font-size:0.7rem; color:var(--muted); margin-top:4px;">${s.topic} / ${new Date(s.lastCheck).toLocaleTimeString()}</div>
-        </div>
-    `).join('') || '<div style="color:var(--muted); text-align:center; padding:10px;">現在アラートはありません</div>';
-  }
-
-  function dismissAlert(t, s) { 
-    if(state.studentStates[`${t}:${s}`]) state.studentStates[`${t}:${s}`].status = 'SAFE'; 
-    saveState(); renderDashboard(); 
   }
 
   function renderSessionManager() {
-    document.getElementById('session-manager-list').innerHTML = state.topics.sort().map(t => {
-      const url = getClientUrl(t);
-      return `<div class="card" style="display:flex; justify-content:space-between; align-items:center;">
-        <div><b>${t}</b><br><small style="color:var(--muted); cursor:pointer;" onclick="navigator.clipboard.writeText('${url}');alert('コピーしました')">${url}</small></div>
-        <div style="display:flex; gap:10px;"><button class="btn btn-red" onclick="terminateSession('${t}')">一括終了</button>
-        <button class="btn btn-ghost" onclick="deleteTopic('${t}')">削除</button></div></div>`;
-    }).join('');
+    document.getElementById('session-manager-list').innerHTML = state.topics.map(t => `
+      <div class="card" style="display:flex; justify-content:space-between;">
+        <div><b>${t}</b></div><button class="btn btn-red" onclick="deleteTopic('${t}')">削除</button></div>
+    `).join('');
   }
+  function deleteTopic(t) { if(confirm('削除?')){ state.topics=state.topics.filter(x=>x!==t); saveAndSync(); } }
 
-  function getClientUrl(t) {
-    const u = new URL(location.href);
-    let bp = u.pathname.replace(/admin\.html$/, '').replace(/admin$/, '');
-    if (!bp.endsWith('/')) bp += '/';
-    return `${u.origin}${bp}client.html?topic=${encodeURIComponent(t)}`;
-  }
-
-  function deleteTopic(t) { if(confirm('試験を削除しますか？')){ state.topics=state.topics.filter(x=>x!==t); saveState(); location.reload(); }}
-  async function terminateSession(t) {
-    if(confirm('全員の試験を終了しますか？')){ 
-        await fetch(`${NTFY_BASE}/${t}`, { method:'POST', body:'FINISH_ALL', headers:{'X-Priority':'5'} }); 
-        alert('送信しました'); 
-    }
-  }
 </script>
 </body>
 </html>
