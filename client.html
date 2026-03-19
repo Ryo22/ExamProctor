@@ -1,251 +1,139 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>接続監視システム | 受験者</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>接続確認システム</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:      #0f1117;
+      --bg: #0f1117;
       --surface: #1a1d27;
-      --border:  #2a2d3a;
-      --text:    #e2e8f0;
-      --muted:   #64748b;
-      --green:   #22c55e;
-      --red:     #ef4444;
-      --blue:    #3b82f6;
+      --border: #2a2d3a;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --red: #ef4444;
+      --blue: #3b82f6;
     }
-    body { font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
-    .screen { display: none; min-height: 100vh; flex-direction: column; }
-    .screen.active { display: flex; }
+    body {
+      font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif;
+      background: var(--bg); color: var(--text);
+      overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center;
+    }
 
-    /* Login */
-    #screen-input { align-items: center; justify-content: center; padding: 1.5rem; }
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2.5rem; width: 100%; max-width: 440px; text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.4); }
-    .form-group { text-align: left; margin-bottom: 1.2rem; }
-    .form-group label { display: block; font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 0.5rem; }
-    .form-group input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 10px; font-size: 1.1rem; text-align: center; font-weight: 600; }
+    #viewport { text-align: center; max-width: 480px; width: 90%; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 2rem; position: relative; overflow: hidden; }
 
-    .btn { border: none; cursor: pointer; border-radius: 10px; font-weight: 800; transition: all 0.2s; font-family: inherit; }
-    .btn:active { transform: scale(0.97); }
-    .btn-green { width: 100%; background: var(--green); color: #000; padding: 14px; font-size: 1.1rem; }
-    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; font-size: 0.8rem; }
+    #state-icon { font-size: 3rem; margin-bottom: 1rem; }
+    #state-label { font-size: 1.5rem; font-weight: 900; margin-bottom: 0.5rem; }
+    #state-desc { font-size: 0.9rem; color: var(--muted); line-height: 1.6; }
 
-    /* Monitor */
-    .mon-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
-    .mon-body { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 2rem; }
-    .status-ring { width: 160px; height: 160px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 4rem; border: 4px solid transparent; transition: all 0.4s; margin-bottom: 1.5rem; }
-    .status-ring.safe { background: #052e16; border-color: var(--green); box-shadow: 0 0 30px rgba(34,197,94,0.15); }
-    .status-ring.alert { background: #450a0a; border-color: var(--red); animation: pulse-ring 1s infinite; }
-    
-    .status-label { font-size: 2rem; font-weight: 900; margin-bottom: 0.5rem; }
-    .status-label.safe { color: var(--green); }
-    .status-label.alert { color: var(--red); }
-    .status-sub { color: var(--muted); font-size: 0.9rem; text-align:center; }
+    /* Alert State */
+    .alert-active { border-color: var(--red); box-shadow: 0 0 30px rgba(239, 68, 68, 0.2); animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0px rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0px rgba(239, 68, 68, 0); } }
 
-    /* Floating Lamp */
-    #status-lamp { position: fixed; top: 15px; right: 15px; z-index: 1000000; display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); padding: 8px 16px; border-radius: 30px; border: 1px solid var(--border); pointer-events: none; }
-    .lamp-dot { width: 12px; height: 12px; border-radius: 50%; background: #444; }
-    .lamp-dot.safe { background: var(--green); box-shadow: 0 0 10px var(--green); }
-    .lamp-dot.alert { background: var(--red); animation: pulse-red 1s infinite; }
-    .lamp-text { font-size: 0.7rem; font-weight: 800; color: white; }
+    .btn { background: var(--border); border: none; color: white; padding: 12px 24px; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 2rem; width: 100%; transition: 0.2s; }
+    .btn:hover { background: var(--muted); }
 
-    @keyframes pulse-red { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-    @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 70% { box-shadow: 0 0 0 20px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
-
-    /* Alert Modal */
-    #alert-overlay { display: none; position: fixed; inset: 0; z-index: 1000001; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px); }
-    .alert-modal { background: var(--surface); border: 2px solid var(--red); border-radius:24px; padding: 2.5rem; width: 90%; max-width: 420px; text-align: center; box-shadow: 0 25px 60px rgba(0,0,0,0.6); }
-
-    /* Finished */
-    #screen-finished { align-items: center; justify-content: center; background: radial-gradient(circle, #1e293b, #0f172a); }
+    .meta-info { position: fixed; bottom: 20px; left: 0; right: 0; font-size: 0.75rem; color: var(--muted); opacity: 0.5; }
   </style>
 </head>
 <body>
 
-<div id="status-lamp" style="display:none;">
-  <div class="lamp-dot" id="lamp-dot"></div>
-  <div class="lamp-text" id="lamp-text">STANDBY</div>
+<div id="viewport">
+    <div id="main-card" class="card">
+        <div id="state-icon">📡</div>
+        <div id="state-label">準備中</div>
+        <div id="state-desc">試験セッションの読み込み中...</div>
+        <button id="dismiss-btn" class="btn" style="display:none;" onclick="onDismiss()">了解しました</button>
+    </div>
 </div>
 
-<div id="screen-input" class="screen active">
-  <div class="card">
-    <div style="font-size: 3rem; margin-bottom: 1rem;">🔒</div>
-    <h1>接続監視システム</h1>
-    <div class="form-group" id="topic-container">
-      <label>セッションコード</label>
-      <input type="text" id="topic-input" placeholder="session-code" />
-    </div>
-    <div id="topic-badge" style="display:none; background:var(--bg); padding:10px; border-radius:8px; margin-bottom:1.5rem; font-size:0.8rem;">
-      セッション: <b id="topic-badge-val"></b>
-    </div>
-    <div class="form-group">
-      <label>学籍番号</label>
-      <input type="text" id="student-id-input" placeholder="学籍番号を入力" />
-    </div>
-    <button class="btn btn-green" onclick="beginMonitoring()">通知を許可して監視開始</button>
-  </div>
-</div>
-
-<div id="screen-monitor" class="screen">
-  <div class="mon-header">
-    <div style="display:flex; align-items:center; gap:10px;">
-      <span style="font-weight:900;" id="mon-sid">--</span>
-      <span style="font-size:0.6rem; color:var(--muted); background:var(--bg); padding:2px 6px; border-radius:4px;" id="mon-topic">--</span>
-    </div>
-    <button class="btn btn-ghost" onclick="copySessionUrl()">🔗 URLコピー</button>
-  </div>
-  <div class="mon-body">
-    <div class="status-ring safe" id="status-ring">🔒</div>
-    <div class="status-label safe" id="status-label">監視中</div>
-    <div class="status-sub" id="status-sub">インターネットを切断した状態で試験を受けてください</div>
-    <div id="last-check" style="margin-top:2rem; font-size:0.7rem; color:var(--muted);">最終確認: --</div>
-  </div>
-</div>
-
-<div id="screen-finished" class="screen">
-  <div style="font-size: 6rem; margin-bottom:1rem;">🎊</div>
-  <h1 style="font-size: 2rem; color: var(--green); margin-bottom:1rem;">監視終了</h1>
-  <p style="text-align:center;">お疲れ様でした。試験は終了しました。<br>ブラウザを閉じてください。</p>
-  <button class="btn btn-ghost" style="margin-top:2rem;" onclick="location.reload()">ホームに戻る</button>
-</div>
-
-<div id="alert-overlay">
-  <div class="alert-modal">
-    <div style="font-size: 3rem;">⚠️</div>
-    <h2 style="color:var(--red); margin:1rem 0;">接続を検知しました</h2>
-    <p>直ちにネットワークを切断してください！</p>
-    <button class="btn btn-blue" style="margin-top:2rem; width:100%; padding:12px;" onclick="dismissAlert()">了解しました</button>
-  </div>
+<div class="meta-info">
+    SESSION: <span id="meta-session">---</span> | ID: <span id="meta-sid">---</span>
 </div>
 
 <script>
-  const NTFY_BASE = 'https://ntfy.sh';
-  const CHECK_INTERVAL = 3000;
-  const CONNECT_CHECK_URL = 'https://www.google.com/favicon.ico';
+    const params = new URLSearchParams(window.location.search);
+    const TOPIC = params.get('topic');
+    const SID = params.get('sid') || 'USER-' + Math.floor(Math.random() * 1000);
+    const NTFY_BASE = 'https://ntfy.sh';
 
-  let topic = '';
-  let studentId = '';
-  let monitorTimer = null;
-  let isAlertActive = false;
-  let lastMessageId = 'all';
-  let myStartTime = 0;
+    document.getElementById('meta-session').textContent = TOPIC || 'UNDEFINED';
+    document.getElementById('meta-sid').textContent = SID;
 
-  const q = new URLSearchParams(location.search);
-  if (q.get('topic')) {
-    document.getElementById('topic-input').value = q.get('topic');
-    document.getElementById('topic-badge').style.display = 'block';
-    document.getElementById('topic-badge-val').textContent = q.get('topic');
-    document.getElementById('topic-container').style.display = 'none';
-  }
+    let isAlert = false;
 
-  function beginMonitoring() {
-    const tVal = document.getElementById('topic-input').value.trim();
-    const sVal = document.getElementById('student-id-input').value.trim();
-    if (!tVal || !sVal) return;
-    if (Notification.permission !== 'granted') Notification.requestPermission();
-    topic = tVal; studentId = sVal;
-    myStartTime = Math.floor(Date.now() / 1000);
-    document.getElementById('mon-sid').textContent = studentId;
-    document.getElementById('mon-topic').textContent = topic;
-    document.getElementById('status-lamp').style.display = 'flex';
-    switchScreen('screen-monitor');
-    sendEvent('REGISTER', '開始');
-    window.addEventListener('blur', () => sendEvent('FOCUS_LOST', '離脱'));
-    window.addEventListener('focus', () => sendEvent('FOCUS_GAINED', '復帰'));
-    checkConnection();
-    monitorTimer = setInterval(checkConnection, CHECK_INTERVAL);
-  }
-
-  async function checkConnection() {
-    let online = false;
-    try {
-      await fetch(CONNECT_CHECK_URL + '?t=' + Date.now(), { mode:'no-cors', cache:'no-store', signal:AbortSignal.timeout(2000) });
-      online = true;
-    } catch(e) { online = false; }
-
-    if (online) {
-      // ネットに繋がった際、まず管理者の終了信号を優先的に確認
-      const isFinished = await pollAdmin();
-      if (!isFinished) onInternetDetected();
-    } else {
-      onOffline();
+    async function sendEvent(type) {
+        if (!TOPIC) return;
+        try {
+            await fetch(`${NTFY_BASE}/${TOPIC}`, {
+                method: 'POST',
+                body: `${type}:${SID}`,
+                headers: { 'Title': 'Exam Security Notification' }
+            });
+        } catch (e) { console.error(e); }
     }
-  }
 
-  async function pollAdmin() {
-    try {
-      const resp = await fetch(`${NTFY_BASE}/${topic}/json?poll=1&since=${lastMessageId}`, {cache:'no-store'});
-      if (!resp.ok) return false;
-      const text = await resp.text();
-      let finished = false;
-      text.trim().split('\n').filter(Boolean).forEach(line => {
-        const msg = JSON.parse(line);
-        if (msg.event === 'message') {
-            lastMessageId = msg.id;
-            if (msg.message === 'FINISH_ALL' && msg.time >= (myStartTime - 10)) finished = true;
+    function updateUI(status) {
+        const card = document.getElementById('main-card');
+        const icon = document.getElementById('state-icon');
+        const label = document.getElementById('state-label');
+        const desc = document.getElementById('state-desc');
+        const btn = document.getElementById('dismiss-btn');
+
+        if (status === 'MONITORING') {
+            card.className = 'card';
+            icon.textContent = '🛡️';
+            label.textContent = '監視中';
+            label.style.color = 'var(--blue)';
+            desc.textContent = 'ネットワーク接続が継続されています。このまま試験を続けてください。';
+            btn.style.display = 'none';
+        } else if (status === 'ALERT') {
+            card.className = 'card alert-active';
+            icon.textContent = '⚠️';
+            label.textContent = '接続を検知しました';
+            label.style.color = 'var(--red)';
+            desc.textContent = '直ちにネットワークを切断してください。';
+            btn.style.display = 'block';
         }
-      });
-      if (finished) finishExam();
-      return finished;
-    } catch(e) { return false; }
-  }
+    }
 
-  function onInternetDetected() {
-    if (isAlertActive) return;
-    isAlertActive = true;
-    if (Notification.permission === 'granted') new Notification('🚨 ネット接続検知！', { body: '速やかに切断してください。' });
-    sendEvent('ALERT', '検知');
-    updateUI('alert', '⚠️', '接続検知！', 'すみやかに切断してください');
-    document.getElementById('alert-overlay').style.display = 'flex';
-  }
+    function checkConnection() {
+        if (navigator.onLine) {
+            if (!isAlert) {
+                isAlert = true;
+                sendEvent('ALERT');
+                updateUI('ALERT');
+            }
+        } else {
+            if (isAlert) {
+                // 自動で解除はせず、了解ボタンを待つ運用の場合
+            } else {
+                updateUI('MONITORING');
+            }
+        }
+    }
 
-  function onOffline() {
-    if (isAlertActive) return;
-    updateUI('safe', '✅', '安全', 'オフラインを確認。そのまま試験を続けてください');
-    document.getElementById('last-check').textContent = '最終確認: ' + new Date().toLocaleTimeString();
-  }
+    function onDismiss() {
+        isAlert = false;
+        sendEvent('DISMISS');
+        updateUI('MONITORING');
+    }
 
-  function dismissAlert() {
-    isAlertActive = false;
-    document.getElementById('alert-overlay').style.display = 'none';
-    sendEvent('DISMISS', '了解');
-  }
-
-  function finishExam() {
-    clearInterval(monitorTimer);
-    document.getElementById('status-lamp').style.display = 'none';
-    document.getElementById('alert-overlay').style.display = 'none';
-    isAlertActive = false;
-    switchScreen('screen-finished');
-  }
-
-  function sendEvent(type, note) {
-    const body = `${type}:${studentId}:${note}`;
-    fetch(`${NTFY_BASE}/${topic}`, { method:'POST', body:body, cache:'no-store' }).catch(()=>{});
-  }
-
-  function updateUI(type, icon, label, sub) {
-    document.getElementById('status-ring').className = 'status-ring ' + type;
-    document.getElementById('status-ring').textContent = icon;
-    document.getElementById('status-label').className = 'status-label ' + type;
-    document.getElementById('status-label').textContent = label;
-    document.getElementById('status-sub').textContent = sub;
-    document.getElementById('lamp-dot').className = 'lamp-dot ' + type;
-    document.getElementById('lamp-text').textContent = (type==='alert') ? '⚠️ 警告中' : '監視中 (SAFE)';
-  }
-
-  function switchScreen(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-  }
-
-  function copySessionUrl() {
-    const u = new URL(location.href);
-    u.searchParams.set('topic', topic);
-    navigator.clipboard.writeText(u.toString()).then(()=>alert('セッションURLをコピーしました'));
-  }
+    // 監視開始
+    if (!TOPIC) {
+        document.getElementById('state-label').textContent = '⚠️ エラー';
+        document.getElementById('state-desc').textContent = '試験用セッションコード（Topic）が指定されていません。正しいURLからアクセスしてください。';
+    } else {
+        updateUI('MONITORING');
+        sendEvent('REGISTER');
+        setInterval(checkConnection, 3000);
+        
+        // ページを離れようとした場合
+        window.onblur = () => sendEvent('FOCUS_LOST');
+        window.onfocus = () => sendEvent('FOCUS_GAINED');
+    }
 </script>
 </body>
 </html>
