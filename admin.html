@@ -43,8 +43,8 @@
     .stat-val { font-size: 1.8rem; font-weight: 900; line-height: 1; }
     
     .filter-scroll { overflow-x: auto; display: flex; gap: 0.8rem; margin-bottom: 1rem; padding-bottom: 10px; }
-    .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; flex-shrink: 0; }
-    .filter-chip.active { border-color: var(--blue); background: rgba(59,130,246,0.1); }
+    .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; flex-shrink: 0; font-size: 0.85rem; font-weight: bold; color: var(--muted); border: 1px solid var(--border); }
+    .filter-chip.active { border-color: var(--blue); background: rgba(59,130,246,0.1); color: var(--blue); }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
     th { text-align: left; padding: 12px; color: var(--muted); border-bottom: 1px solid var(--border); text-transform: uppercase; font-size: 0.65rem; }
@@ -57,6 +57,11 @@
     .btn-green { background: var(--green); color: black; }
     .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-size: 0.75rem; }
     input, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 12px; border-radius: 10px; font-family: inherit; }
+    .pill { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 0.7rem; }
+    .pill.SAFE { background: rgba(34,197,94,0.1); color: var(--green); }
+    .pill.ALERT { background: rgba(239,68,68,0.1); color: var(--red); }
+    .pill.FOCUS-LOST { background: rgba(249,115,22,0.1); color: var(--orange); }
+    .pill.OFFLINE { background: var(--border); color: var(--muted); }
   </style>
 </head>
 <body>
@@ -81,7 +86,7 @@
             <div class="nav-tab" data-target="page-cloud">設定</div>
         </div>
     </div>
-    <div id="cloud-sync-status" style="font-size:0.65rem; color:var(--muted);">● 同期中</div>
+    <div id="cloud-sync-status" style="font-size:0.65rem; color:var(--muted); font-weight:bold;">● クラウド接続中...</div>
 </header>
 
 <main class="app-viewport">
@@ -92,7 +97,9 @@
         <div class="stat-box" style="color:var(--orange);"><div class="stat-val" id="stat-focus">0</div><div class="stat-lbl">離脱中</div></div>
         <div class="stat-box"><div class="stat-val" id="stat-sessions">0</div><div class="stat-lbl">セッション</div></div>
     </div>
+    <p style="font-size:0.65rem; color:var(--muted); margin-bottom:5px;">クラスフィルタ:</p>
     <div class="filter-scroll" id="group-filter-container"></div>
+    <p style="font-size:0.65rem; color:var(--muted); margin-bottom:5px;">試験セッションフィルタ:</p>
     <div class="filter-scroll" id="topic-filter-container"></div>
     <div class="card">
         <h2>受験生状況一覧</h2>
@@ -118,6 +125,7 @@
 
   <div id="page-roster" class="page">
     <div class="card">
+      <h2>名簿登録・一括管理</h2>
       <div style="display:flex; gap:10px; margin-bottom:1rem;">
         <input type="text" id="roster-group" placeholder="クラス"/>
         <input type="text" id="roster-sid" placeholder="学籍番号"/>
@@ -141,12 +149,13 @@
         <div style="margin-bottom:1rem;"><label style="font-size:0.7rem; color:var(--muted);">URL:</label><input type="text" id="sb-url" readonly style="opacity:0.6;" /></div>
         <div style="margin-bottom:1.5rem;"><label style="font-size:0.7rem; color:var(--muted);">Key:</label><input type="password" id="sb-key" readonly style="opacity:0.6;" /></div>
         <p style="font-size:0.75rem;">全ての通信は日本国内のサーバーを介してセキュアに同期されます。</p>
+        <button class="btn btn-ghost" style="margin-top:20px;" onclick="location.reload()">再読み込み</button>
     </div>
   </div>
 </main>
 
 <script>
-  // 🌩️ Supabase 設定 (東京リージョンの新しい情報)
+  // 🌩️ Supabase 設定
   const SUPABASE_URL = 'https://dkjftwhvhsxgcqawemmi.supabase.co';
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRramZ0d2h2aHN4Z2NxYXdlbW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODk5MzUsImV4cCI6MjA4OTQ2NTkzNX0.s4lYa3NRpM3ADs5esfVa_fpaAkVj4NLk7MKzgkSKsFo';
   
@@ -169,35 +178,43 @@
     if (!sb) return;
     try {
         const { error } = await sb.from('settings').upsert({ key: 'admin_state', data: { topics: state.topics, roster: state.roster } });
-        if (error) throw error;
-        document.getElementById('cloud-sync-status').textContent = '● クラウド保存完了 ' + new Date().toLocaleTimeString();
-        document.getElementById('cloud-sync-status').style.color = 'var(--green)';
-    } catch(e) { 
-        console.error('Push Error:', e);
-        document.getElementById('cloud-sync-status').textContent = '● クラウド保存失敗';
-        document.getElementById('cloud-sync-status').style.color = 'var(--red)';
-    }
+        if (error) {
+            console.error('Push Error:', error);
+            document.getElementById('cloud-sync-status').textContent = '● 同期エラー（テーブル未作成？）';
+            document.getElementById('cloud-sync-status').style.color = 'var(--red)';
+        } else {
+            document.getElementById('cloud-sync-status').textContent = '● クラウド保存完了 ' + new Date().toLocaleTimeString();
+            document.getElementById('cloud-sync-status').style.color = 'var(--green)';
+        }
+    } catch(e) { console.error(e); }
   }
 
   async function pullFromCloud() {
     if (!sb) return;
     try {
-        const { data, error } = await sb.from('settings').select('data').eq('key', 'admin_state').single();
-        if (error) throw error;
-        if (data && data.data) {
-            state.topics = data.data.topics || [];
-            state.roster = data.data.roster || {};
+        // .single() はデータがないと 406 エラーを返すため select() のみで行う
+        const { data, error } = await sb.from('settings').select('data').eq('key', 'admin_state');
+        if (error) {
+            console.error('Pull Error:', error);
+            document.getElementById('cloud-sync-status').textContent = '● 同期失敗（SQL未実行？）';
+            document.getElementById('cloud-sync-status').style.color = 'var(--red)';
+            return;
+        }
+        if (data && data.length > 0 && data[0].data) {
+            state.topics = data[0].data.topics || [];
+            state.roster = data[0].data.roster || {};
             renderAll();
             document.getElementById('cloud-sync-status').textContent = '● クラウド同期済み';
             document.getElementById('cloud-sync-status').style.color = 'var(--green)';
+        } else {
+            document.getElementById('cloud-sync-status').textContent = '● クラウド(データ空)';
+            document.getElementById('cloud-sync-status').style.color = 'var(--blue)';
         }
-    } catch(e) {}
+    } catch(e) { console.error(e); }
   }
 
   function handleLogin() {
-    const email = document.getElementById('login-email').value;
-    const pass = document.getElementById('login-pass').value;
-    if (email === 'admin@example.com' && pass === 'password123') {
+    if (document.getElementById('login-email').value === 'admin@example.com' && document.getElementById('login-pass').value === 'password123') {
         sessionStorage.setItem('admin_logged_in', 'true');
         showAdminApp();
     } else { document.getElementById('login-error').textContent = '認証失敗'; }
@@ -215,8 +232,8 @@
 
   window.onload = () => { if (sessionStorage.getItem('admin_logged_in') === 'true') showAdminApp(); };
 
-  function saveAndSync() { pushToCloud(); renderAll(); }
   function renderAll() { renderDashboard(); renderSessionManager(); renderRosterMaster(); }
+  function saveAndSync() { pushToCloud(); renderAll(); }
 
   let filterTopic = null, filterGroup = null;
 
@@ -251,9 +268,8 @@
   }
 
   function copyUrl(t) {
-    const el = document.getElementById('url-' + t);
-    el.select(); document.execCommand('copy');
-    alert('コピーしました: ' + el.value);
+    const el = document.getElementById('url-' + t).select(); document.execCommand('copy');
+    alert('コピーしました: ' + document.getElementById('url-' + t).value);
   }
 
   function getClientUrl(t) {
@@ -292,8 +308,13 @@
 
   function renderDashboard() {
     const rosterIds = Object.keys(state.roster);
-    const groups = ['全体表示', ...new Set(rosterIds.map(id => state.roster[id].group))].sort();
-    const ts = ['全体表示', ...state.topics].sort();
+    
+    // 全体表示を先頭に。他はソート。
+    const otherGroups = [...new Set(rosterIds.map(id => state.roster[id].group))].sort();
+    const groups = ['全体表示', ...otherGroups];
+    
+    const otherTopics = [...state.topics].sort();
+    const ts = ['全体表示', ...otherTopics];
 
     document.getElementById('group-filter-container').innerHTML = groups.map(g => `
         <div class="filter-chip ${(!filterGroup && g==='全体表示') || filterGroup===g ? 'active':''}" onclick="filterGroup='${g==='全体表示'?null:g}';renderDashboard()">${g}</div>
