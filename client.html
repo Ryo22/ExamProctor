@@ -93,52 +93,66 @@
     let isAlert = false;
     let monitoringActive = false;
 
-    // --- 【修正部分】送信キューとリトライロジック ---
+    // --- 送信キューとリトライロジック ---
     let eventQueue =[];
     let isSending = false;
 
     // 即座にfetchせず、一旦キューに保存する
     function sendEvent(type) {
         if (!TOPIC || !SID) return;
+        
+        // 同じタイプのイベントが連続でキューに溜まるのを防ぐ
+        if (eventQueue.length > 0 && eventQueue[eventQueue.length - 1] === `${type}:${SID}`) {
+            return; 
+        }
+        
         eventQueue.push(`${type}:${SID}`);
         processQueue(); // 送信を試みる
     }
 
     // キューの内容を順次送信する（通信が通るまでリトライする）
     async function processQueue() {
-        // 送信中、キューが空、またはブラウザがオフライン認識の場合は中断
+        // 送信中、キューが空、またはOSが完全にオフラインと認識している場合は中断
         if (isSending || eventQueue.length === 0 || !navigator.onLine) return;
         isSending = true;
 
         while (eventQueue.length > 0) {
             const payload = eventQueue[0];
+            
+            // 通信が長時間フリーズするのを防ぐため、3秒でタイムアウトさせる
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+
             try {
                 const response = await fetch(`${NTFY_BASE}/${TOPIC}`, {
                     method: 'POST',
                     body: payload,
-                    headers: { 'Title': 'Exam Security Notification' }
+                    headers: { 'Title': 'Exam Security Notification' },
+                    signal: controller.signal // タイムアウト設定を適用
                 });
                 
+                clearTimeout(timeoutId); // 通信成功したらタイムアウトを解除
+
                 if (response.ok) {
-                    // 送信に成功したらキューから削除
+                    // 送信に成功したらキューから削除（次のイベントへ）
                     eventQueue.shift();
                 } else {
-                    // サーバーエラーの場合は一旦ループを抜けて次回再試行
+                    // サーバー側エラー等の場合は一旦ループを抜ける
                     break;
                 }
             } catch (e) {
-                // 通信確立前の Network Error はここでキャッチされる
-                // キューに残したままループを抜け、数秒後に自動リトライする
-                console.warn('通信未確立のためリトライ待機中...', e);
-                break;
+                clearTimeout(timeoutId);
+                // インターネット未接続、または3秒タイムアウトになった場合
+                console.warn(`通信失敗 (${payload}) - インターネット復帰を待機中...`);
+                break; // キューに残したままループを抜け、次回の定期実行で再トライする
             }
+            
             // 連続送信を避けるためのわずかなインターバル
             await new Promise(r => setTimeout(r, 500));
         }
         
         isSending = false;
     }
-    // ------------------------------------------------
 
     function startProctoring() {
         TOPIC = document.getElementById('input-topic').value.trim();
@@ -158,11 +172,13 @@
 
         monitoringActive = true;
         updateUI('MONITORING');
+        
+        // 登録イベントの送信
         sendEvent('REGISTER');
         
         // 監視のインターバル
         setInterval(checkConnection, 3000);
-        // 【追加】定期的に未送信キューの処理を試みる（通信復帰時にまとめて送るため）
+        // 定期的に未送信キューの処理を試みる（通信復帰時にまとめて送るため）
         setInterval(processQueue, 3000);
     }
 
