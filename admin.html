@@ -58,8 +58,8 @@
     .btn-green { background: var(--green); color: black; }
     .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-size: 0.75rem; }
     
-    input, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; font-family: inherit; }
-    input:focus { border-color: var(--blue); outline:none; }
+    input, textarea, select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; font-family: inherit; }
+    input:focus, select:focus { border-color: var(--blue); outline:none; }
     .memo-input { background: transparent; border: none; border-bottom: 1px solid transparent; font-size: 0.75rem; padding: 4px; border-radius: 0; }
     .memo-input:focus { border-bottom-color: var(--muted); }
 
@@ -96,7 +96,6 @@
 
 <main class="app-viewport">
   <div id="page-dash" class="page active">
-    <!--統計バナーなどは変更なし-->
     <div class="stat-row">
         <div class="stat-box"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">監視対象</div></div>
         <div class="stat-box" style="color:var(--red);"><div class="stat-val" id="stat-alert">0</div><div class="stat-lbl">検知中</div></div>
@@ -109,9 +108,7 @@
     </div>
     <div class="card">
         <h2>受験生状況一覧</h2>
-        <div style="overflow-x:auto;">
-            <table><thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>試験</th><th>状態</th><th>回数</th><th>操作</th><th>メモ</th></tr></thead><tbody id="student-tbody"></tbody></table>
-        </div>
+        <div style="overflow-x:auto;"><table><thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>試験</th><th>状態</th><th>回数</th><th>操作</th><th>メモ</th></tr></thead><tbody id="student-tbody"></tbody></table></div>
     </div>
   </div>
 
@@ -126,12 +123,24 @@
   <div id="page-roster" class="page">
     <div class="card">
       <h2 id="roster-form-title">名簿登録・一括管理</h2>
-      <div style="display:flex; gap:10px; margin-bottom:1rem;">
-        <input type="text" id="roster-group" placeholder="クラス"/><input type="text" id="roster-sid" placeholder="学籍番号"/><input type="text" id="roster-name" placeholder="氏名"/><button class="btn btn-blue" id="roster-save-btn" onclick="saveSingleRoster()">保存</button>
+      <!-- 共通エリア -->
+      <div style="background:rgba(255,255,255,0.03); padding:1.2rem; border-radius:12px; margin-bottom:1.5rem; display:flex; gap:15px; align-items:flex-end;">
+          <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">【共通】試験名：</label><select id="roster-topic-select"></select></div>
+          <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">【共通】クラス：</label><input type="text" id="roster-group" placeholder="クラス名"/></div>
       </div>
-      <textarea id="roster-bulk-input" rows="3" placeholder="クラス,学籍番号,氏名形式でも一括登録可"></textarea><button class="btn btn-green" style="margin-top:10px;" onclick="saveBulkRoster()">一括保存</button>
+      <!-- 個別エリア -->
+      <div style="display:flex; gap:10px; margin-bottom:1rem; align-items:flex-end;">
+          <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">学籍番号：</label><input type="text" id="roster-sid" placeholder="例: 2024001"/></div>
+          <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">氏名：</label><input type="text" id="roster-name" placeholder="氏名"/></div>
+          <button class="btn btn-blue" id="roster-save-btn" style="height:44px;" onclick="saveSingleRoster()">保存</button>
+      </div>
+      <div style="margin-top:2rem;">
+          <label style="font-size:0.75rem; color:var(--muted); margin-bottom:8px; display:block;">一括追加（学籍番号, 氏名 の形式で貼り付け）</label>
+          <textarea id="roster-bulk-input" rows="4" placeholder="2024001, 山田太郎&#10;2024002, 佐藤花子"></textarea>
+          <button class="btn btn-green" style="margin-top:10px;" onclick="saveBulkRoster()">一括保存</button>
+      </div>
     </div>
-    <div class="card"><table><thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>操作</th></tr></thead><tbody id="roster-tbody-master"></tbody></table></div>
+    <div class="card"><table><thead><tr><th>試験名</th><th>クラス</th><th>学籍番号</th><th>氏名</th><th>操作</th></tr></thead><tbody id="roster-tbody-master"></tbody></table></div>
   </div>
 
   <div id="page-cloud" class="page">
@@ -150,53 +159,33 @@
     document.getElementById('sb-url').value = SUPABASE_URL;
     await pullFromCloud();
   }
-
-  /**
-   * 🌩️ 確実にすべての情報をプッシュする
-   */
   async function pushToCloud() {
     if (!sb) return;
     try {
-        await sb.from('settings').upsert({ 
-            key: 'admin_state', 
-            data: { 
-                topics: state.topics, 
-                roster: state.roster, 
-                memos: state.memos,
-                studentStates: state.studentStates, // これが重要: 現在の状態も保存
-                lastIds: state.lastIds
-            } 
-        });
+        await sb.from('settings').upsert({ key: 'admin_state', data: { topics: state.topics, roster: state.roster, memos: state.memos, studentStates: state.studentStates, lastIds: state.lastIds } });
         document.getElementById('cloud-sync-status').textContent = '● 同期済み ' + new Date().toLocaleTimeString();
         document.getElementById('cloud-sync-status').style.color = 'var(--green)';
     } catch(e) {}
   }
-
   async function pullFromCloud() {
     if (!sb) return;
     try {
         const { data } = await sb.from('settings').select('data').eq('key', 'admin_state');
         if (data && data[0]?.data) {
             const d = data[0].data;
-            state.topics = d.topics || [];
-            state.roster = d.roster || {};
-            state.memos = d.memos || {};
-            state.studentStates = d.studentStates || {};
-            state.lastIds = d.lastIds || {};
+            state.topics = d.topics || []; state.roster = d.roster || {}; state.memos = d.memos || {};
+            state.studentStates = d.studentStates || {}; state.lastIds = d.lastIds || {};
             renderAll();
         }
     } catch(e) {}
   }
-
-  function syncNow() { pullFromCloud(); }
   function handleLogin() { if(document.getElementById('login-email').value==='admin@example.com' && document.getElementById('login-pass').value==='password123') { sessionStorage.setItem('admin_logged_in','true'); showAdminApp(); } }
   async function showAdminApp() {
     document.getElementById('login-screen').style.display='none';
     document.querySelector('.app-header').style.display='flex';
     document.querySelector('.app-viewport').classList.add('visible');
     await initCloud();
-    setInterval(pollAll, POLL_INTERVAL); 
-    setInterval(pullFromCloud, 10000); // 他端末からの変更も定期取得
+    setInterval(pollAll, POLL_INTERVAL); setInterval(pullFromCloud, 10000);
   }
   window.onload = () => { if(sessionStorage.getItem('admin_logged_in')==='true') showAdminApp(); };
 
@@ -208,20 +197,24 @@
 
   function renderAll() { renderDashboard(); renderSessionManager(); renderRosterMaster(); }
   function saveAndSync() { pushToCloud(); renderAll(); }
-
-  // 試験管理
   function addTopic() { const v = document.getElementById('new-topic-input').value.trim(); if(v && !state.topics.includes(v)){ state.topics.push(v); saveAndSync(); document.getElementById('new-topic-input').value=''; } }
-  function deleteTopic(t) { if(confirm('削除しますか？')){ state.topics = state.topics.filter(x=>x!==t); saveAndSync(); } }
+  
   function renderSessionManager() {
-    document.getElementById('session-manager-list').innerHTML = state.topics.sort().map(t => {
-      const url = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1) + `client.html?topic=${encodeURIComponent(t)}`;
+    const list = document.getElementById('session-manager-list');
+    list.innerHTML = state.topics.sort().map(t => {
+      const u = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1) + `client.html?topic=${encodeURIComponent(t)}`;
       return `<div class="card" style="display:flex; justify-content:space-between; align-items:center;">
-        <div><b>${t}</b><div style="display:flex; gap:8px; margin-top:5px;"><input type="text" value="${url}" readonly style="font-size:0.65rem; width:250px;" id="u-${t}"/><button class="btn btn-ghost" onclick="const e=document.getElementById('u-${t}');e.select();document.execCommand('copy');alert('コピー完了');">コピー</button></div></div>
+        <div><b>${t}</b><div style="display:flex; gap:8px; margin-top:5px;"><input type="text" value="${u}" readonly style="font-size:0.65rem; width:250px;" id="u-${t}"/><button class="btn btn-ghost" onclick="const e=document.getElementById('u-${t}');e.select();document.execCommand('copy');alert('コピー完了');">コピー</button></div></div>
         <button class="btn btn-red" onclick="deleteTopic('${t}')">削除</button></div>`;
     }).join('');
+    // 名簿用のセレクトボックスを更新
+    const sel = document.getElementById('roster-topic-select');
+    const oldVal = sel.value;
+    sel.innerHTML = state.topics.sort().map(t => `<option value="${t}">${t}</option>`).join('');
+    if(oldVal && state.topics.includes(oldVal)) sel.value = oldVal;
   }
+  function deleteTopic(t) { if(confirm('削除しますか？')){ state.topics = state.topics.filter(x=>x!==t); saveAndSync(); } }
 
-  // 監視ロジック
   async function pollAll() {
     const NTFY_BASE = 'https://ntfy.sh';
     let changed = false;
@@ -246,8 +239,7 @@
         });
       } catch(e) {}
     }
-    if (changed) { renderDashboard(); pushToCloud(); } // 受信時もクラウドへプッシュ
-    else { renderDashboard(); }
+    if (changed) { renderDashboard(); pushToCloud(); } else { renderDashboard(); }
   }
 
   let fT = null, fG = null;
@@ -266,8 +258,7 @@
       if (!r && s.status!=='OFFLINE') uk++;
       rows.push({ t, sid, name: r?r.name:'⚠️ 名簿未登録', group: r?r.group:'---', status: s.status, count: s.count, isUk: !r });
     });
-    document.getElementById('stat-unknown').textContent = uk;
-    document.getElementById('stat-total').textContent = rows.length;
+    document.getElementById('stat-unknown').textContent = uk; document.getElementById('stat-total').textContent = rows.length;
     document.getElementById('stat-alert').textContent = rows.filter(r=>r.status==='ALERT').length;
     document.getElementById('stat-focus').textContent = rows.filter(r=>r.status==='FOCUS-LOST').length;
 
@@ -275,36 +266,53 @@
       <tr class="${r.status==='ALERT'?'alert-row':''} ${r.isUk?'unknown-row':''}">
         <td><small>${r.group}</small></td><td><b>${r.sid}</b></td><td>${r.name}</td><td>${r.t}</td>
         <td><span class="pill ${r.status}">${r.status}</span></td><td>${r.count}</td>
-        <td style="display:flex; gap:5px;">
-            <button class="btn btn-ghost" onclick="dismissAlert('${r.t}','${r.sid}')">解除</button>
-            <button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${r.sid}')">編集</button>
-        </td>
+        <td style="display:flex; gap:5px;"><button class="btn btn-ghost" onclick="dismissAlert('${r.t}','${r.sid}')">解除</button><button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${r.sid}')">編集</button></td>
         <td><input type="text" class="memo-input" value="${state.memos[r.sid]||''}" onblur="updateMemo('${r.sid}', this.value)" placeholder="メモ..."/></td>
       </tr>`).join('');
   }
 
-  function updateMemo(sid, val) { state.memos[sid] = val; pushToCloud(); }
+  function updateMemo(sid, v) { state.memos[sid] = v; pushToCloud(); }
   function dismissAlert(t, s) { if(state.studentStates[`${t}:${s}`]) { state.studentStates[`${t}:${s}`].status = 'SAFE'; saveAndSync(); } }
   
   function editRoster(sid) {
-    const info = state.roster[sid] || { group:'---', name:'' };
-    document.getElementById('roster-group').value = info.group; document.getElementById('roster-sid').value = sid; document.getElementById('roster-name').value = info.name;
-    document.getElementById('roster-form-title').textContent = '名簿データの編集'; document.getElementById('roster-save-btn').textContent = '更新';
+    const info = state.roster[sid] || { group:'', name:'', topic:'' };
+    document.getElementById('roster-group').value = info.group;
+    document.getElementById('roster-sid').value = sid;
+    document.getElementById('roster-name').value = info.name;
+    if(info.topic) document.getElementById('roster-topic-select').value = info.topic;
+    document.getElementById('roster-form-title').textContent = '名簿データの編集';
+    document.getElementById('roster-save-btn').textContent = '更新';
     switchTab('page-roster'); document.getElementById('roster-group').focus();
   }
+
   function saveSingleRoster() {
-    const sid = document.getElementById('roster-sid').value.trim(), name = document.getElementById('roster-name').value.trim(), grp = document.getElementById('roster-group').value.trim() || '---';
-    if(sid && name) { state.roster[sid] = { name, group: grp }; saveAndSync(); 
-    document.getElementById('roster-sid').value=''; document.getElementById('roster-name').value=''; document.getElementById('roster-group').value=''; 
-    document.getElementById('roster-form-title').textContent = '名簿登録・一括管理'; document.getElementById('roster-save-btn').textContent = '保存'; }
+    const sid = document.getElementById('roster-sid').value.trim(), name = document.getElementById('roster-name').value.trim();
+    const grp = document.getElementById('roster-group').value.trim() || '---', t = document.getElementById('roster-topic-select').value;
+    if(sid && name) { 
+        state.roster[sid] = { name, group: grp, topic: t }; 
+        saveAndSync(); 
+        document.getElementById('roster-sid').value=''; document.getElementById('roster-name').value=''; 
+        // 試験名とクラスは消さずに残す
+    }
   }
-  function deleteRoster(sid) { if(confirm('削除しますか？')){ delete state.roster[sid]; saveAndSync(); } }
-  function saveBulkRoster() { document.getElementById('roster-bulk-input').value.split('\n').filter(l=>l).forEach(line => { const p = line.split(/[,\t]/).map(s=>s.trim()); if (p[0] && p[1] && p[2]) state.roster[p[1]] = { name: p[2], group: p[0] }; }); document.getElementById('roster-bulk-input').value = ''; saveAndSync(); }
+
+  function saveBulkRoster() {
+    const grp = document.getElementById('roster-group').value.trim() || '---', t = document.getElementById('roster-topic-select').value;
+    const lines = document.getElementById('roster-bulk-input').value.split('\n').filter(l=>l);
+    lines.forEach(line => {
+      const p = line.split(/[,\t\s]+/).filter(Boolean); // カンマ、タブ、スペースに対応
+      if (p[0] && p[1]) state.roster[p[0]] = { name: p[1], group: grp, topic: t };
+    });
+    document.getElementById('roster-bulk-input').value = '';
+    saveAndSync();
+  }
+
   function renderRosterMaster() {
     const entries = Object.entries(state.roster).sort((a,b)=>a[1].group.localeCompare(b[1].group) || a[0].localeCompare(b[0]));
     const ukSids = [...new Set(Object.keys(state.studentStates).map(k=>k.split(':')[1]).filter(sid => !state.roster[sid]))].sort();
-    document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `<tr><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td><td><button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${sid}')">編集</button> <button class="btn btn-red" onclick="deleteRoster('${sid}')">削除</button></td></tr>`).join('') + ukSids.map(sid => `<tr class="unknown-row"><td>---</td><td><b>${sid}</b></td><td>⚠️ 未登録</td><td><button class="btn btn-blue" onclick="editRoster('${sid}')">登録</button></td></tr>`).join('');
+    document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `<tr><td>${info.topic||'---'}</td><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td><td><button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${sid}')">編集</button> <button class="btn btn-red" onclick="deleteRoster('${sid}')">削除</button></td></tr>`).join('') + ukSids.map(sid => `<tr class="unknown-row"><td>---</td><td>---</td><td><b>${sid}</b></td><td>⚠️ 未登録</td><td><button class="btn btn-blue" onclick="editRoster('${sid}')">登録</button></td></tr>`).join('');
   }
+  function deleteRoster(sid) { if(confirm('削除しますか？')){ delete state.roster[sid]; saveAndSync(); } }
 </script>
 </body>
 </html>
