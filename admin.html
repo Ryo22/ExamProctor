@@ -54,6 +54,8 @@
     .pill.ALERT { background: rgba(239,68,68,0.1); color: var(--red); }
     .pill.FOCUS-LOST { background: rgba(249,115,22,0.1); color: var(--orange); }
     .pill.OFFLINE { background: var(--border); color: var(--muted); }
+    /* 新規追加：終了ステータス用の青いラベル */
+    .pill.FINISHED { background: rgba(59,130,246,0.1); color: var(--blue); }
   </style>
 </head>
 <body>
@@ -151,7 +153,6 @@
   let sb = null;
   const NTFY_BASE = 'https://ntfy.sh';
   
-  // 新しいデータ構造
   let state = { topics:[], roster: {}, studentStates: {}, lastIds: {} };
   let filterTopic = null, filterGroup = null;
 
@@ -164,20 +165,14 @@
     } catch(e) { console.error('Cloud Init Error:', e); }
   }
 
-  // ★ データベースから一括取得（起動時・手動リロード時）
   async function fetchFullDatabase() {
     if (!sb) return;
     try {
-        // 1. セッション取得
         const { data: topicsData } = await sb.from('sessions').select('topic_id');
         state.topics = topicsData ? topicsData.map(t => t.topic_id) :[];
-
-        // 2. 名簿取得
         const { data: studentsData } = await sb.from('students').select('*');
         state.roster = {};
         if (studentsData) studentsData.forEach(s => { state.roster[s.sid] = { name: s.name, group: s.class_group }; });
-
-        // 3. ステータス取得
         await fetchStatusFromDB();
         
         document.getElementById('cloud-sync-status').textContent = '● DB同期完了 ' + new Date().toLocaleTimeString();
@@ -186,7 +181,6 @@
     } catch(e) { console.error(e); }
   }
 
-  // ステータスだけをDBから引っ張る関数
   async function fetchStatusFromDB() {
       const { data: statusData } = await sb.from('exam_status').select('*');
       if (statusData) {
@@ -207,17 +201,15 @@
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('main-header').style.display = 'flex';
     document.getElementById('main-viewport').classList.add('visible');
-    
     await initCloud();
-    setInterval(pollAll, 3000); // 3秒ごとにNtfyから最新の通信を受信
-    setInterval(fetchStatusFromDB, 15000); // 15秒に1回DBとステータスを同期（複数タブ対策）
+    setInterval(pollAll, 3000);
+    setInterval(fetchStatusFromDB, 15000);
   }
   
   window.onload = () => { if (sessionStorage.getItem('admin_logged_in') === 'true') showAdminApp(); };
 
   function renderAll() { renderDashboard(); renderSessionManager(); renderRosterMaster(); }
 
-  // ナビゲーション
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -226,12 +218,11 @@
     });
   });
 
-  // セッション管理
   async function addTopic() {
     const val = document.getElementById('new-topic-input').value.trim();
     if (val && !state.topics.includes(val)) { 
         state.topics.push(val); 
-        await sb.from('sessions').insert({ topic_id: val }); // DBへ直接追加
+        await sb.from('sessions').insert({ topic_id: val });
         document.getElementById('new-topic-input').value=''; 
         renderSessionManager(); renderDashboard();
     }
@@ -240,9 +231,31 @@
   async function deleteTopic(t) { 
       if(confirm('削除しますか？')){ 
           state.topics = state.topics.filter(x=>x!==t); 
-          await sb.from('sessions').delete().eq('topic_id', t); // DBから直接削除
+          await sb.from('sessions').delete().eq('topic_id', t);
           renderSessionManager(); renderDashboard();
       } 
+  }
+
+  // ★ 新規追加：「セッション一括終了」処理
+  async function finishAllSession(t) {
+      if(!confirm(`セッション「${t}」を強制終了しますか？\n対象者の画面が「お疲れ様でした」に切り替わり、ステータスが「終了」になります。`)) return;
+      
+      // 1. データベース上のステータスを一括で「FINISHED」に更新
+      await sb.from('exam_status').update({ status: 'FINISHED' }).eq('topic_id', t);
+      
+      // 2. ローカルのステータスも更新
+      for(let key in state.studentStates) {
+          if(state.studentStates[key].topic === t) {
+              state.studentStates[key].status = 'FINISHED';
+          }
+      }
+      
+      // 3. 全受講生に対して、プッシュ通知で強制終了コマンド（FINISH_ALL）を送信する
+      try {
+          await fetch(`${NTFY_BASE}/${t}`, { method: 'POST', body: 'FINISH_ALL' });
+      } catch(e) {}
+      
+      renderDashboard();
   }
 
   function renderSessionManager() {
@@ -254,7 +267,11 @@
                 <input type="text" value="${url}" readonly style="font-size:0.65rem; padding:4px 8px; width:220px;" id="url-${t}"/>
                 <button class="btn btn-ghost" onclick="copyUrl('${t}')">コピー</button>
             </div></div>
-        <button class="btn btn-red" style="padding:4px 12px; font-size:0.75rem;" onclick="deleteTopic('${t}')">削除</button>
+        <div>
+            <!-- 一括終了ボタンを追加 -->
+            <button class="btn btn-blue" style="padding:4px 12px; font-size:0.75rem;" onclick="finishAllSession('${t}')">一括終了</button>
+            <button class="btn btn-red" style="padding:4px 12px; font-size:0.75rem;" onclick="deleteTopic('${t}')">削除</button>
+        </div>
       </div>`;
     }).join('');
   }
@@ -262,10 +279,8 @@
   function copyUrl(t) { const el = document.getElementById('url-' + t); el.select(); document.execCommand('copy'); }
   function getClientUrl(t) { return `${new URL(location.href).origin}/client.html?topic=${encodeURIComponent(t)}`; }
 
-  // ★ 新しい Ntfy 受信ロジック (受信したら即座に独立したテーブルへ書き込む)
   async function pollAll() {
     let needsRender = false;
-
     for (const t of state.topics) {
         try {
             const resp = await fetch(`${NTFY_BASE}/${t}/json?poll=1&since=${state.lastIds[t] || 'all'}`, { cache: 'no-store' });
@@ -279,22 +294,25 @@
                     state.lastIds[t] = msg.id;
                     const parts = msg.message.split(':');
                     const type = parts[0], sid = parts[1];
+                    
+                    // 管理者自身が送信した「一括終了コマンド」は無視する
+                    if (type === 'FINISH_ALL') continue;
                     if (!sid) continue;
 
-                    // 未登録者の自動登録（studentsテーブルへの Upsert）
                     if (!state.roster[sid]) {
                         state.roster[sid] = { name: '⚠️ 未登録', group: '未分類' };
                         await sb.from('students').upsert({ sid: sid, name: '⚠️ 未登録', class_group: '未分類' });
                     }
 
-                    // ステータスの計算
                     if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic: t, sid, status: 'SAFE', alertCount: 0 };
                     const s = state.studentStates[`${t}:${sid}`];
+                    
+                    // ステータス判定に FINISH を追加
                     if (type === 'ALERT') { s.status = 'ALERT'; s.alertCount++; }
                     else if (type === 'FOCUS_LOST') s.status = 'FOCUS-LOST';
                     else if (type === 'REGISTER' || type === 'FOCUS_GAINED' || type === 'DISMISS') s.status = 'SAFE';
+                    else if (type === 'FINISH') s.status = 'FINISHED';
 
-                    // 計算結果を exam_status テーブルへ Upsert
                     await sb.from('exam_status').upsert({
                         topic_id: t, sid: sid, status: s.status, alert_count: s.alertCount
                     }, { onConflict: 'topic_id, sid' });
@@ -304,11 +322,9 @@
             }
         } catch(e) {}
     }
-    
     if (needsRender) { renderDashboard(); renderRosterMaster(); }
   }
 
-  // ダッシュボード描画
   window.setFilterGroup = function(g) { filterGroup = g; renderDashboard(); };
   window.setFilterTopic = function(t) { filterTopic = t; renderDashboard(); };
 
@@ -360,7 +376,6 @@
       }
   }
   
-  // 名簿管理
   function editRoster(sid) {
     const info = state.roster[sid];
     if (!info) return;
@@ -378,8 +393,7 @@
     const grp = document.getElementById('roster-group').value.trim() || '未分類';
     if(sid && name) { 
         state.roster[sid] = { name, group: grp }; 
-        await sb.from('students').upsert({ sid: sid, name: name, class_group: grp }); // 個別にDB更新
-        
+        await sb.from('students').upsert({ sid: sid, name: name, class_group: grp });
         document.getElementById('roster-sid').value = ''; document.getElementById('roster-name').value = ''; document.getElementById('roster-group').value = '';
         document.getElementById('roster-form-title').textContent = '名簿登録'; document.getElementById('roster-save-btn').textContent = '保存';
         renderRosterMaster(); renderDashboard();
@@ -389,7 +403,7 @@
   async function deleteRoster(sid) { 
       if(confirm('削除しますか？')){ 
           delete state.roster[sid]; 
-          await sb.from('students').delete().eq('sid', sid); // DBから削除
+          await sb.from('students').delete().eq('sid', sid);
           renderRosterMaster(); renderDashboard();
       } 
   }
