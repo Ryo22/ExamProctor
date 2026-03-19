@@ -296,33 +296,41 @@
     renderDashboard();
   }
 
+  // フィルタをセットする関数
+  window.setFilterGroup = function(g) {
+    filterGroup = g;
+    renderDashboard();
+  };
+  window.setFilterTopic = function(t) {
+    filterTopic = t;
+    renderDashboard();
+  };
+
   function renderDashboard() {
     const rosterIds = Object.keys(state.roster);
     
-    // クラスフィルタの配列作成
+    // フィルタ配列
     const otherGroups = [...new Set(rosterIds.map(id => state.roster[id].group))].sort();
     const groups = ['全体表示', ...otherGroups];
-    
-    // セッションフィルタの配列作成
     const otherTopics = [...state.topics].sort();
     const ts = ['全体表示', ...otherTopics];
 
-    // ボタンの描画（mapの順序通りに描画されます）
+    // ボタンの描画
     document.getElementById('group-filter-container').innerHTML = groups.map(g => `
-        <div class="filter-chip ${(!filterGroup && g==='全体表示') || filterGroup===g ? 'active':''}" onclick="filterGroup='${g==='全体表示'?null:g}';renderDashboard()">${g}</div>
+        <div class="filter-chip ${(filterGroup === null && g==='全体表示') || filterGroup===g ? 'active':''}" 
+             onclick="setFilterGroup(${g === '全体表示' ? 'null' : `'${g}'`})">${g}</div>
     `).join('');
     
     document.getElementById('topic-filter-container').innerHTML = ts.map(t => `
-        <div class="filter-chip ${(!filterTopic && t==='全体表示') || filterTopic===t ? 'active':''}" onclick="filterTopic='${t==='全体表示'?null:t}';renderDashboard()">${t}</div>
+        <div class="filter-chip ${(filterTopic === null && t==='全体表示') || filterTopic===t ? 'active':''}" 
+             onclick="setFilterTopic(${t === '全体表示' ? 'null' : `'${t}'`})">${t}</div>
     `).join('');
 
     // 表示データの生成
     const activeStudentKeys = Object.keys(state.studentStates);
     const allStudentKeysSet = new Set(activeStudentKeys);
     state.topics.forEach(t => {
-      rosterIds.forEach(sid => {
-        allStudentKeysSet.add(`${t}:${sid}`);
-      });
+      rosterIds.forEach(sid => { allStudentKeysSet.add(`${t}:${sid}`); });
     });
 
     let rows = [], unknownCount = 0;
@@ -330,8 +338,8 @@
         const [t, sid] = key.split(':');
         const rInfo = state.roster[sid];
         const sInfo = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', alertCount:0 };
-        if (filterTopic && t !== filterTopic) return;
-        if (filterGroup && (!rInfo || rInfo.group !== filterGroup)) return;
+        if (filterTopic !== null && t !== filterTopic) return;
+        if (filterGroup !== null && (!rInfo || rInfo.group !== filterGroup)) return;
         const isUnknown = !rInfo;
         if (isUnknown && sInfo.status !== 'OFFLINE') unknownCount++;
         rows.push({
