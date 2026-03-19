@@ -46,7 +46,7 @@
     .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; font-size: 0.85rem; font-weight: bold; color: var(--muted); transition: 0.15s; user-select: none; }
     .filter-chip:hover { border-color: var(--muted); }
     .filter-chip.active { border-color: var(--blue); background: rgba(59,130,246,0.1); color: var(--blue); }
-    .filter-all { order: -99; } /* 強制的に先頭へ配置 */
+    .filter-all { order: -99; }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
     th { text-align: left; padding: 12px; color: var(--muted); border-bottom: 1px solid var(--border); text-transform: uppercase; font-size: 0.65rem; }
@@ -162,7 +162,7 @@
 </main>
 
 <script>
-  // 🌩️ Supabase 設定 (東京リージョンの新しい情報)
+  // 🌩️ Supabase 設定
   const SUPABASE_URL = 'https://dkjftwhvhsxgcqawemmi.supabase.co';
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRramZ0d2h2aHN4Z2NxYXdlbW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODk5MzUsImV4cCI6MjA4OTQ2NTkzNX0.s4lYa3NRpM3ADs5esfVa_fpaAkVj4NLk7MKzgkSKsFo';
   
@@ -170,7 +170,8 @@
   const NTFY_BASE = 'https://ntfy.sh';
   const POLL_INTERVAL = 3000;
   
-  let state = { topics: [], roster: {}, studentStates: {}, lastIds: {} };
+  let state = { topics:[], roster: {}, studentStates: {}, lastIds: {} };
+  let hasAlertedReadError = false; // エラーの連続ポップアップを防ぐためのフラグ
 
   async function initCloud() {
     try {
@@ -181,29 +182,56 @@
     } catch(e) { console.error('Cloud Init Error:', e); }
   }
 
+  // ★★★ デバッグ用：エラー時に警告を出す保存処理 ★★★
   async function pushToCloud() {
     if (!sb) return;
     try {
-        const { error } = await sb.from('settings').upsert({ key: 'admin_state', data: { topics: state.topics, roster: state.roster } });
-        if (!error) {
+        const payload = { key: 'admin_state', data: { topics: state.topics, roster: state.roster } };
+        console.log("⬆️ Supabaseへ保存試行中...", payload);
+        
+        const { error } = await sb.from('settings').upsert(payload);
+        
+        if (error) {
+            console.error("❌ Supabase 保存エラー:", error);
+            alert("【保存エラー】\n" + JSON.stringify(error, null, 2));
+            document.getElementById('cloud-sync-status').textContent = '● 保存失敗';
+            document.getElementById('cloud-sync-status').style.color = 'var(--red)';
+        } else {
+            console.log("✅ 保存成功");
             document.getElementById('cloud-sync-status').textContent = '● クラウド同期済み ' + new Date().toLocaleTimeString();
             document.getElementById('cloud-sync-status').style.color = 'var(--green)';
         }
-    } catch(e) { console.error(e); }
+    } catch(e) { 
+        console.error("❌ 予期せぬ保存例外:", e); 
+        alert("【保存例外エラー】通信がブロックされた可能性があります。\n" + e.message);
+    }
   }
 
+  // ★★★ デバッグ用：エラー時に警告を出す読込処理 ★★★
   async function pullFromCloud() {
     if (!sb) return;
     try {
         const { data, error } = await sb.from('settings').select('data').eq('key', 'admin_state');
-        if (!error && data && data.length > 0 && data[0].data) {
-            state.topics = data[0].data.topics || [];
+        
+        if (error) {
+            console.error("❌ Supabase 読込エラー:", error);
+            if (!hasAlertedReadError) {
+                alert("【読込エラー】\n" + JSON.stringify(error, null, 2));
+                hasAlertedReadError = true;
+            }
+            return;
+        }
+
+        if (data && data.length > 0 && data[0].data) {
+            state.topics = data[0].data.topics ||[];
             state.roster = data[0].data.roster || {};
             renderAll();
             document.getElementById('cloud-sync-status').textContent = '● クラウド同期済み';
             document.getElementById('cloud-sync-status').style.color = 'var(--green)';
         }
-    } catch(e) {}
+    } catch(e) {
+        console.error("❌ 予期せぬ読込例外:", e);
+    }
   }
 
   function syncNow() { pullFromCloud(); }
@@ -221,7 +249,7 @@
     await initCloud();
     renderAll();
     setInterval(pollAll, POLL_INTERVAL);
-    setInterval(pullFromCloud, 10000);
+    setInterval(pullFromCloud, 10000); // 10秒ごとの自動同期
   }
   window.onload = () => { if (sessionStorage.getItem('admin_logged_in') === 'true') showAdminApp(); };
 
@@ -305,7 +333,7 @@
     const rosterIds = Object.keys(state.roster);
     
     // クラスフィルタ
-    const otherGroups = [...new Set(rosterIds.map(id => state.roster[id].group))].sort();
+    const otherGroups =[...new Set(rosterIds.map(id => state.roster[id].group))].sort();
     const groupHtml = `
         <div class="filter-chip filter-all ${(filterGroup === null) ? 'active':''}" onclick="setFilterGroup(null)">全体表示</div>
         ${otherGroups.map(g => `
@@ -326,7 +354,7 @@
     const allStudentKeysSet = new Set(Object.keys(state.studentStates));
     state.topics.forEach(t => { rosterIds.forEach(sid => { allStudentKeysSet.add(`${t}:${sid}`); }); });
 
-    let rows = [], unknownCount = 0;
+    let rows =[], unknownCount = 0;
     allStudentKeysSet.forEach(key => {
         const [t, sid] = key.split(':');
         const rInfo = state.roster[sid];
