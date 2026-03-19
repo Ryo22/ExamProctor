@@ -9,9 +9,20 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a; --text: #e2e8f0; --muted: #64748b; --green: #22c55e; --red: #ef4444; --blue: #3b82f6; --orange: #f97316; }
-    body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+    :root {
+      --bg:      #0f1117;
+      --surface: #1a1d27;
+      --border:  #2a2d3a;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --green:   #22c55e;
+      --red:     #ef4444;
+      --blue:    #3b82f6;
+      --orange:  #f97316;
+    }
+    body { font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
     
+    /* Login Screen */
     #login-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; align-items: center; justify-content: center; }
     .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2.5rem; width: 100%; max-width: 420px; text-align: center; }
     .login-input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 12px; border-radius: 10px; margin-bottom: 1rem; }
@@ -32,7 +43,8 @@
     .stat-val { font-size: 1.8rem; font-weight: 900; line-height: 1; }
     
     .filter-scroll { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 1rem; padding-bottom: 10px; }
-    .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; font-size: 0.85rem; font-weight: bold; color: var(--muted); user-select: none; }
+    .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; font-size: 0.85rem; font-weight: bold; color: var(--muted); transition: 0.15s; user-select: none; }
+    .filter-chip:hover { border-color: var(--muted); }
     .filter-chip.active { border-color: var(--blue); background: rgba(59,130,246,0.1); color: var(--blue); }
     .filter-all { order: -99; }
 
@@ -47,15 +59,14 @@
     .btn-red { background: rgba(239,68,68,0.1); color: var(--red); }
     .btn-green { background: var(--green); color: black; }
     .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-size: 0.75rem; }
-    input, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 12px; border-radius: 10px; }
+    input, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 12px; border-radius: 10px; font-family: inherit; }
+    input:focus { border-color: var(--blue); outline:none; }
     
     .pill { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 0.7rem; }
     .pill.SAFE { background: rgba(34,197,94,0.1); color: var(--green); }
     .pill.ALERT { background: rgba(239,68,68,0.1); color: var(--red); }
-    .pill.FOCUS-LOST { background: rgba(249,115,22,0.1); color: var(--orange); }
+    .pill.FOCUS-LOST { background: rgba(249, 115, 22, 0.1); color: var(--orange); }
     .pill.OFFLINE { background: var(--border); color: var(--muted); }
-    /* 新規追加：終了ステータス用の青いラベル */
-    .pill.FINISHED { background: rgba(59,130,246,0.1); color: var(--blue); }
   </style>
 </head>
 <body>
@@ -66,10 +77,11 @@
     <input type="email" id="login-email" class="login-input" placeholder="メールアドレス" value="admin@example.com" />
     <input type="password" id="login-pass" class="login-input" placeholder="パスワード" value="password123" />
     <button class="btn btn-blue" style="width:100%; padding:14px;" onclick="handleLogin()">ログイン</button>
+    <p id="login-error" style="color:var(--red); font-size:0.75rem; margin-top:1rem;"></p>
   </div>
 </div>
 
-<header class="app-header" style="display:none;" id="main-header">
+<header class="app-header" style="display:none;">
     <div style="display:flex; align-items:center; gap:20px;">
         <h1 style="font-size:1.1rem; font-weight:900;">🛡️ Proctor Cloud</h1>
         <div class="nav-tabs">
@@ -82,7 +94,7 @@
     <div id="cloud-sync-status" style="font-size:0.65rem; color:var(--muted); font-weight:bold;">● クラウド接続中...</div>
 </header>
 
-<main class="app-viewport" id="main-viewport">
+<main class="app-viewport">
   <div id="page-dash" class="page active">
     <div class="stat-row">
         <div class="stat-box"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">監視対象</div></div>
@@ -97,7 +109,7 @@
       <div class="filter-scroll" id="topic-filter-container"></div>
     </div>
     <div class="card">
-        <h2>受験生状況一覧 <button class="btn btn-ghost" onclick="fetchStatusFromDB()">↻ 最新情報を取得</button></h2>
+        <h2>受験生状況一覧</h2>
         <div style="overflow-x:auto;">
             <table>
                 <thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>試験</th><th>状態</th><th>回数</th><th>操作</th></tr></thead>
@@ -127,6 +139,8 @@
         <input type="text" id="roster-name" placeholder="氏名"/>
         <button class="btn btn-blue" id="roster-save-btn" onclick="saveSingleRoster()">保存</button>
       </div>
+      <textarea id="roster-bulk-input" rows="4" placeholder="クラス,学籍番号,氏名形式で一括貼り付け"></textarea>
+      <button class="btn btn-green" style="margin-top:10px;" onclick="saveBulkRoster()">一括保存</button>
     </div>
     <div class="card">
         <table>
@@ -141,54 +155,47 @@
         <h2>🌩️ クラウド接続情報 (東京リージョン)</h2>
         <div style="margin-bottom:1rem;"><label style="font-size:0.7rem; color:var(--muted);">URL:</label><input type="text" id="sb-url" readonly /></div>
         <div style="margin-bottom:1.5rem;"><label style="font-size:0.7rem; color:var(--muted);">Key:</label><input type="password" id="sb-key" readonly /></div>
-        <button class="btn btn-ghost" onclick="fetchFullDatabase()">強制フル同期</button>
+        <button class="btn btn-ghost" onclick="syncNow()">手動同期</button>
     </div>
   </div>
 </main>
 
 <script>
-  // 🌩️ Supabase 設定
   const SUPABASE_URL = 'https://dkjftwhvhsxgcqawemmi.supabase.co';
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRramZ0d2h2aHN4Z2NxYXdlbW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODk5MzUsImV4cCI6MjA4OTQ2NTkzNX0.s4lYa3NRpM3ADs5esfVa_fpaAkVj4NLk7MKzgkSKsFo';
   let sb = null;
   const NTFY_BASE = 'https://ntfy.sh';
-  
-  let state = { topics:[], roster: {}, studentStates: {}, lastIds: {} };
-  let filterTopic = null, filterGroup = null;
+  const POLL_INTERVAL = 3000;
+  let state = { topics: [], roster: {}, studentStates: {}, lastIds: {} };
 
   async function initCloud() {
     try {
         sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         document.getElementById('sb-url').value = SUPABASE_URL;
         document.getElementById('sb-key').value = SUPABASE_KEY;
-        await fetchFullDatabase();
-    } catch(e) { console.error('Cloud Init Error:', e); }
+        await pullFromCloud();
+    } catch(e) {}
   }
 
-  async function fetchFullDatabase() {
+  async function pushToCloud() {
     if (!sb) return;
     try {
-        const { data: topicsData } = await sb.from('sessions').select('topic_id');
-        state.topics = topicsData ? topicsData.map(t => t.topic_id) :[];
-        const { data: studentsData } = await sb.from('students').select('*');
-        state.roster = {};
-        if (studentsData) studentsData.forEach(s => { state.roster[s.sid] = { name: s.name, group: s.class_group }; });
-        await fetchStatusFromDB();
-        
-        document.getElementById('cloud-sync-status').textContent = '● DB同期完了 ' + new Date().toLocaleTimeString();
+        await sb.from('settings').upsert({ key: 'admin_state', data: { topics: state.topics, roster: state.roster } });
+        document.getElementById('cloud-sync-status').textContent = '● DB同期完了 ' + new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
         document.getElementById('cloud-sync-status').style.color = 'var(--green)';
-        renderAll();
-    } catch(e) { console.error(e); }
+    } catch(e) {}
   }
 
-  async function fetchStatusFromDB() {
-      const { data: statusData } = await sb.from('exam_status').select('*');
-      if (statusData) {
-          statusData.forEach(s => {
-              state.studentStates[`${s.topic_id}:${s.sid}`] = { topic: s.topic_id, sid: s.sid, status: s.status, alertCount: s.alert_count };
-          });
-      }
-      renderDashboard();
+  async function pullFromCloud() {
+    if (!sb) return;
+    try {
+        const { data } = await sb.from('settings').select('data').eq('key', 'admin_state');
+        if (data && data.length > 0 && data[0].data) {
+            state.topics = data[0].data.topics || [];
+            state.roster = data[0].data.roster || {};
+            renderAll();
+        }
+    } catch(e) {}
   }
 
   function handleLogin() {
@@ -196,19 +203,22 @@
         sessionStorage.setItem('admin_logged_in', 'true'); showAdminApp();
     }
   }
-  
+
   async function showAdminApp() {
     document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('main-header').style.display = 'flex';
-    document.getElementById('main-viewport').classList.add('visible');
+    document.querySelector('.app-header').style.display = 'flex';
+    document.querySelector('.app-viewport').classList.add('visible');
     await initCloud();
-    setInterval(pollAll, 3000);
-    setInterval(fetchStatusFromDB, 15000);
+    renderAll();
+    setInterval(pollAll, POLL_INTERVAL);
+    setInterval(pullFromCloud, 10000);
   }
-  
   window.onload = () => { if (sessionStorage.getItem('admin_logged_in') === 'true') showAdminApp(); };
 
   function renderAll() { renderDashboard(); renderSessionManager(); renderRosterMaster(); }
+  function saveAndSync() { pushToCloud(); renderAll(); }
+
+  let filterTopic = null, filterGroup = null;
 
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -218,44 +228,9 @@
     });
   });
 
-  async function addTopic() {
+  function addTopic() {
     const val = document.getElementById('new-topic-input').value.trim();
-    if (val && !state.topics.includes(val)) { 
-        state.topics.push(val); 
-        await sb.from('sessions').insert({ topic_id: val });
-        document.getElementById('new-topic-input').value=''; 
-        renderSessionManager(); renderDashboard();
-    }
-  }
-
-  async function deleteTopic(t) { 
-      if(confirm('削除しますか？')){ 
-          state.topics = state.topics.filter(x=>x!==t); 
-          await sb.from('sessions').delete().eq('topic_id', t);
-          renderSessionManager(); renderDashboard();
-      } 
-  }
-
-  // ★ 新規追加：「セッション一括終了」処理
-  async function finishAllSession(t) {
-      if(!confirm(`セッション「${t}」を強制終了しますか？\n対象者の画面が「お疲れ様でした」に切り替わり、ステータスが「終了」になります。`)) return;
-      
-      // 1. データベース上のステータスを一括で「FINISHED」に更新
-      await sb.from('exam_status').update({ status: 'FINISHED' }).eq('topic_id', t);
-      
-      // 2. ローカルのステータスも更新
-      for(let key in state.studentStates) {
-          if(state.studentStates[key].topic === t) {
-              state.studentStates[key].status = 'FINISHED';
-          }
-      }
-      
-      // 3. 全受講生に対して、プッシュ通知で強制終了コマンド（FINISH_ALL）を送信する
-      try {
-          await fetch(`${NTFY_BASE}/${t}`, { method: 'POST', body: 'FINISH_ALL' });
-      } catch(e) {}
-      
-      renderDashboard();
+    if (val && !state.topics.includes(val)) { state.topics.push(val); saveAndSync(); document.getElementById('new-topic-input').value=''; }
   }
 
   function renderSessionManager() {
@@ -264,65 +239,57 @@
       return `<div class="card" style="display:flex; justify-content:space-between; align-items:center;">
         <div><b style="font-size:1.2rem;">${t}</b><br>
             <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                <input type="text" value="${url}" readonly style="font-size:0.65rem; padding:4px 8px; width:220px;" id="url-${t}"/>
+                <input type="text" value="${url}" readonly style="font-size:0.65rem; padding:6px 10px; width:280px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text);" id="url-${t}"/>
                 <button class="btn btn-ghost" onclick="copyUrl('${t}')">コピー</button>
-            </div></div>
-        <div>
-            <!-- 一括終了ボタンを追加 -->
-            <button class="btn btn-blue" style="padding:4px 12px; font-size:0.75rem;" onclick="finishAllSession('${t}')">一括終了</button>
+            </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button class="btn btn-blue" style="padding:4px 12px; font-size:0.75rem;">一括終了</button>
             <button class="btn btn-red" style="padding:4px 12px; font-size:0.75rem;" onclick="deleteTopic('${t}')">削除</button>
         </div>
       </div>`;
     }).join('');
   }
 
-  function copyUrl(t) { const el = document.getElementById('url-' + t); el.select(); document.execCommand('copy'); }
-  function getClientUrl(t) { return `${new URL(location.href).origin}/client.html?topic=${encodeURIComponent(t)}`; }
+  function copyUrl(t) {
+    const el = document.getElementById('url-' + t); el.select(); document.execCommand('copy');
+    alert('コピーしました: ' + el.value);
+  }
+
+  /**
+   * 正確な配布用 URL を生成する関数
+   */
+  function getClientUrl(t) {
+    // 現在のプロトコルとホスト、そしてディレクトリまでのパスを取得
+    const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+    return `${baseUrl}client.html?topic=${encodeURIComponent(t)}`;
+  }
+
+  function deleteTopic(t) { if(confirm('削除しますか？')){ state.topics=state.topics.filter(x=>x!==t); saveAndSync(); } }
 
   async function pollAll() {
-    let needsRender = false;
     for (const t of state.topics) {
         try {
-            const resp = await fetch(`${NTFY_BASE}/${t}/json?poll=1&since=${state.lastIds[t] || 'all'}`, { cache: 'no-store' });
+            const resp = await fetch(`${NTFY_BASE}/${t}/json?poll=1&since=${state.lastIds[t] || 'all'}`);
             if (!resp.ok) continue;
             const text = await resp.text();
-            
-            const lines = text.trim().split('\n').filter(Boolean);
-            for (const line of lines) {
+            text.trim().split('\n').filter(Boolean).forEach(line => {
                 const msg = JSON.parse(line);
                 if (msg.event === 'message') {
                     state.lastIds[t] = msg.id;
                     const parts = msg.message.split(':');
-                    const type = parts[0], sid = parts[1];
-                    
-                    // 管理者自身が送信した「一括終了コマンド」は無視する
-                    if (type === 'FINISH_ALL') continue;
-                    if (!sid) continue;
-
-                    if (!state.roster[sid]) {
-                        state.roster[sid] = { name: '⚠️ 未登録', group: '未分類' };
-                        await sb.from('students').upsert({ sid: sid, name: '⚠️ 未登録', class_group: '未分類' });
-                    }
-
+                    const sid = parts[1];
+                    if (!sid) return;
                     if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic: t, sid, status: 'SAFE', alertCount: 0 };
                     const s = state.studentStates[`${t}:${sid}`];
-                    
-                    // ステータス判定に FINISH を追加
-                    if (type === 'ALERT') { s.status = 'ALERT'; s.alertCount++; }
-                    else if (type === 'FOCUS_LOST') s.status = 'FOCUS-LOST';
-                    else if (type === 'REGISTER' || type === 'FOCUS_GAINED' || type === 'DISMISS') s.status = 'SAFE';
-                    else if (type === 'FINISH') s.status = 'FINISHED';
-
-                    await sb.from('exam_status').upsert({
-                        topic_id: t, sid: sid, status: s.status, alert_count: s.alertCount
-                    }, { onConflict: 'topic_id, sid' });
-
-                    needsRender = true;
+                    if (parts[0] === 'ALERT') { s.status = 'ALERT'; s.alertCount++; }
+                    else if (parts[0] === 'FOCUS_LOST') s.status = 'FOCUS-LOST';
+                    else if (['REGISTER', 'FOCUS_GAINED', 'DISMISS'].includes(parts[0])) s.status = 'SAFE';
                 }
-            }
+            });
         } catch(e) {}
     }
-    if (needsRender) { renderDashboard(); renderRosterMaster(); }
+    renderDashboard();
   }
 
   window.setFilterGroup = function(g) { filterGroup = g; renderDashboard(); };
@@ -330,92 +297,36 @@
 
   function renderDashboard() {
     const rosterIds = Object.keys(state.roster);
-    
-    const otherGroups =[...new Set(rosterIds.map(id => state.roster[id].group))].sort();
-    document.getElementById('group-filter-container').innerHTML = `<div class="filter-chip filter-all ${filterGroup===null?'active':''}" onclick="setFilterGroup(null)">全体</div>` + otherGroups.map(g => `<div class="filter-chip ${filterGroup===g?'active':''}" onclick="setFilterGroup('${g}')">${g}</div>`).join('');
-    
-    const otherTopics =[...state.topics].sort();
-    document.getElementById('topic-filter-container').innerHTML = `<div class="filter-chip filter-all ${filterTopic===null?'active':''}" onclick="setFilterTopic(null)">全体</div>` + otherTopics.map(t => `<div class="filter-chip ${filterTopic===t?'active':''}" onclick="setFilterTopic('${t}')">${t}</div>`).join('');
+    const otherGroups = [...new Set(rosterIds.map(id => state.roster[id].group))].sort();
+    const groupHtml = `<div class="filter-chip filter-all ${(filterGroup === null) ? 'active':''}" onclick="setFilterGroup(null)">全体表示</div>` + otherGroups.map(g => `<div class="filter-chip ${(filterGroup === g) ? 'active':''}" onclick="setFilterGroup('${g}')">${g}</div>`).join('');
+    document.getElementById('group-filter-container').innerHTML = groupHtml;
+    const otherTopics = [...state.topics].sort();
+    const topicHtml = `<div class="filter-chip filter-all ${(filterTopic === null) ? 'active':''}" onclick="setFilterTopic(null)">全体表示</div>` + otherTopics.map(t => `<div class="filter-chip ${(filterTopic === t) ? 'active':''}" onclick="setFilterTopic('${t}')">${t}</div>`).join('');
+    document.getElementById('topic-filter-container').innerHTML = topicHtml;
 
     const allKeys = new Set(Object.keys(state.studentStates));
-    state.topics.forEach(t => { rosterIds.forEach(sid => { allKeys.add(`${t}:${sid}`); }); });
-
-    let rows =[], unknownCount = 0;
+    state.topics.forEach(t => rosterIds.forEach(sid => allKeys.add(`${t}:${sid}`)));
+    let rows = [], ukCount = 0;
     allKeys.forEach(key => {
         const [t, sid] = key.split(':');
-        const rInfo = state.roster[sid];
-        const sInfo = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', alertCount:0 };
-        
+        const r = state.roster[sid], s = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', alertCount:0 };
         if (filterTopic !== null && t !== filterTopic) return;
-        if (filterGroup !== null && (!rInfo || rInfo.group !== filterGroup)) return;
-        
-        const isUnknown = rInfo ? (rInfo.name === '⚠️ 未登録') : true; 
-        if (isUnknown && sInfo.status !== 'OFFLINE') unknownCount++;
-
-        rows.push({ topic: t, sid: sid, name: rInfo ? rInfo.name : '⚠️ 未登録', group: rInfo ? rInfo.group : '未分類', status: sInfo.status, alertCount: sInfo.alertCount, isUnknown: isUnknown });
+        if (filterGroup !== null && (!r || r.group !== filterGroup)) return;
+        if (!r && s.status !== 'OFFLINE') ukCount++;
+        rows.push({ t, sid, name: r?r.name:'⚠️ 名簿未登録', group: r?r.group:'---', status: s.status, alertCount: s.alertCount, uk: !r });
     });
-
     document.getElementById('stat-total').textContent = rows.length;
     document.getElementById('stat-alert').textContent = rows.filter(r=>r.status==='ALERT').length;
     document.getElementById('stat-focus').textContent = rows.filter(r=>r.status==='FOCUS-LOST').length;
-    document.getElementById('stat-unknown').textContent = unknownCount;
-
-    document.getElementById('student-tbody').innerHTML = rows.sort((a,b)=>a.sid.localeCompare(b.sid)).map(r => `
-        <tr class="${r.status==='ALERT'?'alert-row':''} ${r.isUnknown?'unknown-row':''}">
-            <td><small>${r.group}</small></td><td><b>${r.sid}</b></td><td>${r.name}</td><td>${r.topic}</td>
-            <td><span class="pill ${r.status}">${r.status}</span></td><td>${r.alertCount}</td>
-            <td><button class="btn btn-ghost" style="padding:2px 8px; font-size:0.7rem;" onclick="dismissAlert('${r.topic}','${r.sid}')">解除</button></td></tr>
-    `).join('');
+    document.getElementById('stat-unknown').textContent = ukCount;
+    document.getElementById('student-tbody').innerHTML = rows.sort((a,b)=>a.sid.localeCompare(b.sid)).map(r => `<tr class="${r.status==='ALERT'?'alert-row':''} ${r.uk?'unknown-row':''}"><td><small>${r.group}</small></td><td><b>${r.sid}</b></td><td>${r.name}</td><td>${r.t}</td><td><span class="pill ${r.status}">${r.status}</span></td><td>${r.alertCount}</td><td><button class="btn btn-ghost" style="padding:2px 8px;" onclick="dismissAlert('${r.t}','${r.sid}')">解除</button></td></tr>`).join('');
   }
-
-  async function dismissAlert(t, sid) { 
-      if(state.studentStates[`${t}:${sid}`]) {
-          state.studentStates[`${t}:${sid}`].status = 'SAFE'; 
-          await sb.from('exam_status').upsert({ topic_id: t, sid: sid, status: 'SAFE' }, { onConflict: 'topic_id, sid' });
-          renderDashboard(); 
-      }
-  }
-  
-  function editRoster(sid) {
-    const info = state.roster[sid];
-    if (!info) return;
-    document.getElementById('roster-group').value = info.group;
-    document.getElementById('roster-sid').value = sid;
-    document.getElementById('roster-name').value = info.name;
-    document.getElementById('roster-form-title').textContent = '名簿の編集';
-    document.getElementById('roster-save-btn').textContent = '更新';
-    window.location.hash = 'roster-group'; document.getElementById('roster-group').focus();
-  }
-
-  async function saveSingleRoster() {
-    const sid = document.getElementById('roster-sid').value.trim();
-    const name = document.getElementById('roster-name').value.trim();
-    const grp = document.getElementById('roster-group').value.trim() || '未分類';
-    if(sid && name) { 
-        state.roster[sid] = { name, group: grp }; 
-        await sb.from('students').upsert({ sid: sid, name: name, class_group: grp });
-        document.getElementById('roster-sid').value = ''; document.getElementById('roster-name').value = ''; document.getElementById('roster-group').value = '';
-        document.getElementById('roster-form-title').textContent = '名簿登録'; document.getElementById('roster-save-btn').textContent = '保存';
-        renderRosterMaster(); renderDashboard();
-    }
-  }
-
-  async function deleteRoster(sid) { 
-      if(confirm('削除しますか？')){ 
-          delete state.roster[sid]; 
-          await sb.from('students').delete().eq('sid', sid);
-          renderRosterMaster(); renderDashboard();
-      } 
-  }
-
-  function renderRosterMaster() {
-    const entries = Object.entries(state.roster).sort((a,b)=>a[1].group!==b[1].group ? a[1].group.localeCompare(b[1].group) : a[0].localeCompare(b[0]));
-    document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `
-        <tr><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td>
-            <td><button class="btn btn-ghost" style="padding:4px 10px; font-size:0.75rem; color:var(--blue); border-color:var(--blue);" onclick="editRoster('${sid}')">編集</button>
-                <button class="btn btn-red" style="padding:4px 10px; font-size:0.75rem;" onclick="deleteRoster('${sid}')">削除</button></td></tr>
-    `).join('');
-  }
+  function dismissAlert(t, s) { if(state.studentStates[`${t}:${s}`]) state.studentStates[`${t}:${s}`].status = 'SAFE'; renderDashboard(); }
+  function editRoster(sid) { const info = state.roster[sid]; if (!info) return; document.getElementById('roster-group').value = info.group; document.getElementById('roster-sid').value = sid; document.getElementById('roster-name').value = info.name; document.getElementById('roster-form-title').textContent = '名簿データの編集'; document.getElementById('roster-save-btn').textContent = '更新'; document.getElementById('roster-group').focus(); }
+  function saveSingleRoster() { const sid = document.getElementById('roster-sid').value.trim(), name = document.getElementById('roster-name').value.trim(), grp = document.getElementById('roster-group').value.trim() || '---'; if(sid && name) { state.roster[sid] = { name, group: grp }; saveAndSync(); document.getElementById('roster-sid').value = ''; document.getElementById('roster-name').value = ''; document.getElementById('roster-group').value = ''; document.getElementById('roster-form-title').textContent = '名簿登録・一括管理'; document.getElementById('roster-save-btn').textContent = '保存'; } }
+  function deleteRoster(sid) { if(confirm('削除しますか？')){ delete state.roster[sid]; saveAndSync(); } }
+  function saveBulkRoster() { document.getElementById('roster-bulk-input').value.split('\n').filter(l=>l).forEach(line => { const p = line.split(/[,\t]/).map(s=>s.trim()); if (p[0] && p[1] && p[2]) state.roster[p[1]] = { name: p[2], group: p[0] }; }); document.getElementById('roster-bulk-input').value = ''; saveAndSync(); }
+  function renderRosterMaster() { const entries = Object.entries(state.roster).sort((a,b)=>{ if(a[1].group !== b[1].group) return a[1].group.localeCompare(b[1].group); return a[0].localeCompare(b[0]); }); document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `<tr><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td><td><button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue); padding:4px 10px;" onclick="editRoster('${sid}')">編集</button> <button class="btn btn-red" style="padding:4px 10px;" onclick="deleteRoster('${sid}')">削除</button></td></tr>`).join(''); }
 </script>
 </body>
 </html>
