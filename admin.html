@@ -42,8 +42,8 @@
     .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; text-align: center; }
     .stat-val { font-size: 1.8rem; font-weight: 900; line-height: 1; }
     
-    .filter-scroll { overflow-x: auto; display: flex; gap: 0.8rem; margin-bottom: 1rem; padding-bottom: 10px; }
-    .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; flex-shrink: 0; font-size: 0.85rem; font-weight: bold; color: var(--muted); }
+    .filter-scroll { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 1rem; padding-bottom: 10px; }
+    .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; font-size: 0.85rem; font-weight: bold; color: var(--muted); transition: 0.2s; }
     .filter-chip.active { border-color: var(--blue); background: rgba(59,130,246,0.1); color: var(--blue); }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
@@ -149,7 +149,7 @@
 
   <div id="page-cloud" class="page">
     <div class="card">
-        <h2>🌩️ クラウド接続設定 (東京リージョン)</h2>
+        <h2>🌩️ クラウド接続情報 (東京リージョン)</h2>
         <div style="margin-bottom:1rem;"><label style="font-size:0.7rem; color:var(--muted);">URL:</label><input type="text" id="sb-url" readonly /></div>
         <div style="margin-bottom:1.5rem;"><label style="font-size:0.7rem; color:var(--muted);">Key:</label><input type="password" id="sb-key" readonly /></div>
         <button class="btn btn-ghost" onclick="syncNow()">手動同期</button>
@@ -298,9 +298,26 @@
 
   function renderDashboard() {
     const rosterIds = Object.keys(state.roster);
-    const activeStudentKeys = Object.keys(state.studentStates); // ["Math-Test:12345", ...]
+    
+    // クラスフィルタの配列作成
+    const otherGroups = [...new Set(rosterIds.map(id => state.roster[id].group))].sort();
+    const groups = ['全体表示', ...otherGroups];
+    
+    // セッションフィルタの配列作成
+    const otherTopics = [...state.topics].sort();
+    const ts = ['全体表示', ...otherTopics];
 
-    // 全ての受験予定者＋現在の接続者
+    // ボタンの描画（mapの順序通りに描画されます）
+    document.getElementById('group-filter-container').innerHTML = groups.map(g => `
+        <div class="filter-chip ${(!filterGroup && g==='全体表示') || filterGroup===g ? 'active':''}" onclick="filterGroup='${g==='全体表示'?null:g}';renderDashboard()">${g}</div>
+    `).join('');
+    
+    document.getElementById('topic-filter-container').innerHTML = ts.map(t => `
+        <div class="filter-chip ${(!filterTopic && t==='全体表示') || filterTopic===t ? 'active':''}" onclick="filterTopic='${t==='全体表示'?null:t}';renderDashboard()">${t}</div>
+    `).join('');
+
+    // 表示データの生成
+    const activeStudentKeys = Object.keys(state.studentStates);
     const allStudentKeysSet = new Set(activeStudentKeys);
     state.topics.forEach(t => {
       rosterIds.forEach(sid => {
@@ -308,38 +325,20 @@
       });
     });
 
-    const groups = ['全体表示', ...new Set(rosterIds.map(id => state.roster[id].group))].sort();
-    const ts = ['全体表示', ...state.topics].sort();
-
-    document.getElementById('group-filter-container').innerHTML = groups.map(g => `
-        <div class="filter-chip ${(!filterGroup && g==='全体表示') || filterGroup===g ? 'active':''}" onclick="filterGroup='${g==='全体表示'?null:g}';renderDashboard()">${g}</div>
-    `).join('');
-    document.getElementById('topic-filter-container').innerHTML = ts.map(t => `
-        <div class="filter-chip ${(!filterTopic && t==='全体表示') || filterTopic===t ? 'active':''}" onclick="filterTopic='${t==='全体表示'?null:t}';renderDashboard()">${t}</div>
-    `).join('');
-
     let rows = [], unknownCount = 0;
     allStudentKeysSet.forEach(key => {
         const [t, sid] = key.split(':');
         const rInfo = state.roster[sid];
         const sInfo = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', alertCount:0 };
-
-        // フィルタリング
         if (filterTopic && t !== filterTopic) return;
         if (filterGroup && (!rInfo || rInfo.group !== filterGroup)) return;
-
-        // 名簿外判定
         const isUnknown = !rInfo;
         if (isUnknown && sInfo.status !== 'OFFLINE') unknownCount++;
-
         rows.push({
-            topic: t,
-            sid: sid,
+            topic: t, sid: sid,
             name: rInfo ? rInfo.name : '⚠️ 名簿未登録',
             group: rInfo ? rInfo.group : '---',
-            status: sInfo.status,
-            alertCount: sInfo.alertCount,
-            isUnknown: isUnknown
+            status: sInfo.status, alertCount: sInfo.alertCount, isUnknown: isUnknown
         });
     });
 
