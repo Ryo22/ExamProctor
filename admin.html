@@ -41,36 +41,36 @@
     .stat-lbl { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; margin-top: 5px; }
 
     .filter-scroll { border-radius: 12px; padding-bottom: 10px; overflow-x: auto; display: flex; gap: 0.8rem; margin-bottom: 1rem; scrollbar-width: thin; }
-    .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 16px; cursor: pointer; transition: 0.2s; text-align: center; }
+    .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 16px; cursor: pointer; transition: 0.2s; text-align: center; flex-shrink: 0; }
     .filter-chip:hover { border-color: var(--blue); }
-    .filter-chip.active { border-color: var(--blue); background: rgba(59,130,246,0.12); box-shadow: 0 0 10px rgba(59,130,246,0.1); }
+    .filter-chip.active { border-color: var(--blue); background: rgba(59,130,246,0.15); box-shadow: 0 0 10px rgba(59,130,246,0.1); }
     .chip-name { font-weight: 800; font-size: 0.85rem; }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th { text-align: left; padding: 12px; color: var(--muted); border-bottom: 1px solid var(--border); font-size: 0.75rem; text-transform: uppercase; }
+    th { text-align: left; padding: 12px; color: var(--muted); border-bottom: 1px solid var(--border); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
     td { padding: 12px; border-bottom: 1px solid var(--border); }
     tr.alert-row { background: rgba(239, 68, 68, 0.1); }
 
-    .pill { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; }
+    .pill { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; display: inline-block; min-width: 60px; text-align: center; }
     .pill.ALERT { background: var(--red); color: white; }
     .pill.FOCUS-LOST { background: var(--orange); color: white; }
     .pill.SAFE { background: rgba(34,197,94,0.15); color: var(--green); }
     .pill.OFFLINE { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
 
     .form-row { display: flex; gap: 10px; margin-bottom: 1rem; }
-    input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; font-family: inherit; }
-    .btn { border: none; cursor: pointer; border-radius: 8px; font-weight: 700; padding: 8px 16px; transition: 0.2s; white-space: nowrap; }
+    input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; font-family: inherit; font-size: 0.85rem; }
+    .btn { border: none; cursor: pointer; border-radius: 8px; font-weight: 700; padding: 8px 16px; transition: 0.2s; white-space: nowrap; font-size: 0.85rem; }
     .btn-blue { background: var(--blue); color: white; }
     .btn-red { background: rgba(239,68,68,0.15); color: var(--red); }
     .btn-green { background: var(--green); color: black; }
-    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-size: 0.75rem; }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-size: 0.7rem; }
   </style>
 </head>
 <body>
 
 <header class="app-header">
   <div style="display:flex; align-items:center;">
-    <h1 style="font-size:1.2rem; font-weight:900;">🛡️ ProctorAdmin</h1>
+    <h1 style="font-size:1.1rem; font-weight:900;">🛡️ ProctorAdmin</h1>
     <div class="nav-tabs">
       <div class="nav-tab active" data-target="page-dash">ダッシュボード</div>
       <div class="nav-tab" data-target="page-sessions">試験管理</div>
@@ -78,7 +78,7 @@
       <div class="nav-tab" data-target="page-log">システムログ</div>
     </div>
   </div>
-  <div id="sync-indicator" style="font-size:0.65rem; color:var(--muted);">● 同期中</div>
+  <div id="sync-indicator" style="font-size:0.65rem; color:var(--muted); font-weight:700;">● 同期中</div>
 </header>
 
 <main class="app-viewport">
@@ -92,24 +92,24 @@
     </div>
 
     <!-- Group Filter -->
-    <h2>1. フィルター：クラス</h2>
+    <h2 style="margin-top:0.5rem;">1. フィルター：クラス</h2>
     <div class="filter-scroll" id="group-filter-container"></div>
     
     <!-- Session Filter -->
-    <h2>2. フィルター：試験セッション</h2>
+    <h2 style="margin-top:0.5rem;">2. フィルター：試験セッション</h2>
     <div class="filter-scroll" id="topic-filter-container"></div>
 
     <div class="dash-grid">
       <div class="grid-left">
-        <div class="card">
-          <h2>検知トレンド (分単位)</h2>
+        <div class="card" style="padding:1rem;">
+          <h2 style="margin-bottom:0.5rem;">検知トレンド (分単位)</h2>
           <div style="height:150px;"><canvas id="alertChart"></canvas></div>
         </div>
         <div class="card">
           <h2>受験生状況 (一覧)</h2>
           <div style="overflow-x:auto;">
             <table>
-              <thead><tr><th>試験</th><th>クラス</th><th>学籍番号</th><th>氏名</th><th>状態</th><th>検知数</th><th>操作</th></tr></thead>
+              <thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>試験</th><th>状態</th><th>検知数</th><th>操作</th></tr></thead>
               <tbody id="student-tbody"></tbody>
             </table>
           </div>
@@ -118,7 +118,7 @@
       <div class="grid-right">
         <div class="card">
           <h2>最新アラート</h2>
-          <div id="active-alerts-list" style="font-size:0.8rem;"></div>
+          <div id="active-alerts-list" style="font-size:0.75rem;"></div>
         </div>
       </div>
     </div>
@@ -148,7 +148,7 @@
       <hr style="border:0.5px solid var(--border); margin-bottom:1.5rem;">
       <h2>一括登録 (貼り付け)</h2>
       <p style="font-size:0.75rem; color:var(--muted); margin-bottom:0.5rem;">「学籍番号,氏名,クラス」形式で入力。</p>
-      <textarea id="roster-bulk-input" placeholder="2024001,田中太郎,JP Class"></textarea>
+      <textarea id="roster-bulk-input" rows="5" placeholder="2024001,田中太郎,JP Class"></textarea>
       <button class="btn btn-green" onclick="saveBulkRoster()">一括保存</button>
     </div>
     <div class="card">
@@ -174,7 +174,15 @@
 
   function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) state = { ...state, ...JSON.parse(raw) };
+    if (raw) {
+        state = { ...state, ...JSON.parse(raw) };
+        // データの互換性チェック
+        Object.keys(state.roster).forEach(sid => {
+            if (typeof state.roster[sid] === 'string') {
+                state.roster[sid] = { name: state.roster[sid], group: '---' };
+            }
+        });
+    }
   }
   function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -198,7 +206,7 @@
     const ctx = document.getElementById('alertChart').getContext('2d');
     alertChart = new Chart(ctx, {
         type: 'line',
-        data: { labels: state.chartLabels, datasets: [{ label: '検知数', data: state.chartHits, borderColor: '#ef4444', tension: 0.4, fill: false }] },
+        data: { labels: state.chartLabels, datasets: [{ label: '検知数', data: state.chartHits, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.4, fill: true, pointRadius: 4 }] },
         options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } } }, plugins: { legend: { display: false } } }
     });
   }
@@ -236,7 +244,7 @@
         if (p[0] && p[1]) state.roster[p[0]] = { name: p[1], group: p[2] || '---' };
     });
     document.getElementById('roster-bulk-input').value = '';
-    saveState(); renderRosterMaster(); renderDashboard(); alert('一括保存しました');
+    saveState(); renderRosterMaster(); renderDashboard(); alert('名簿を保存しました');
   }
 
   function clearRosterForm() { 
@@ -244,23 +252,24 @@
   }
 
   function deleteRoster(sid) {
-    if(confirm('削除しますか？')){ delete state.roster[sid]; saveState(); renderRosterMaster(); renderDashboard(); }
+    if(confirm('名簿から削除しますか？')){ delete state.roster[sid]; saveState(); renderRosterMaster(); renderDashboard(); }
   }
 
   function editRoster(sid) {
     const info = state.roster[sid];
-    document.getElementById('roster-sid').value = sid;
-    document.getElementById('roster-name').value = info.name;
-    document.getElementById('roster-group').value = info.group;
+    document.getElementById('roster-sid').value = sid || '';
+    document.getElementById('roster-name').value = info.name || '';
+    document.getElementById('roster-group').value = info.group || '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function renderRosterMaster() {
-    document.getElementById('roster-tbody-master').innerHTML = Object.entries(state.roster).sort().map(([sid, info]) => `
+    const entries = Object.entries(state.roster).sort();
+    document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `
       <tr><td><b>${sid}</b></td><td>${info.name}</td><td>${info.group}</td>
           <td>
-            <button class="btn btn-blue" style="padding:4px 8px; font-size:0.7rem;" onclick="editRoster('${sid}')">編集</button>
-            <button class="btn btn-red" style="padding:4px 8px; font-size:0.7rem;" onclick="deleteRoster('${sid}')">削除</button>
+            <button class="btn btn-blue" style="padding:4px 10px; font-size:0.7rem;" onclick="editRoster('${sid}')">編集</button>
+            <button class="btn btn-red" style="padding:4px 10px; font-size:0.7rem;" onclick="deleteRoster('${sid}')">削除</button>
           </td></tr>
     `).join('');
   }
@@ -268,7 +277,7 @@
   async function pollAll() {
     for (const t of state.topics) {
         try {
-            const resp = await fetch(`${NTFY_BASE}/${t}/json?poll=1&since=${state.lastIds[t] || 'all'}`);
+            const resp = await fetch(`${NTFY_BASE}/${t}/json?poll=1&since=${state.lastIds[t] || 'all'}`, { cache: 'no-store' });
             if (!resp.ok) continue;
             const text = await resp.text();
             text.trim().split('\n').filter(Boolean).forEach(line => {
@@ -301,10 +310,12 @@
 
   function renderDashboard() {
     const allRosterIds = Object.keys(state.roster);
-    const groups = ['全体表示', ...new Set(allRosterIds.map(id => state.roster[id].group))];
-    const topics = ['全体表示', ...state.topics];
+    
+    // フィルターUIの生成
+    const uniqueGroups = Array.from(new Set(allRosterIds.map(id => state.roster[id].group || '---'))).sort();
+    const groups = ['全体表示', ...uniqueGroups];
+    const topics = ['全体表示', ...state.topics.sort()];
 
-    // Filter UI - Groups
     document.getElementById('group-filter-container').innerHTML = groups.map(g => {
         const active = (g === '全体表示' && !filterGroup) || (g === filterGroup);
         return `<div class="filter-chip ${active?'active':''}" onclick="filterGroup='${g==='全体表示'?null:g}';renderDashboard()">
@@ -312,7 +323,6 @@
         </div>`;
     }).join('');
 
-    // Filter UI - Topics
     document.getElementById('topic-filter-container').innerHTML = topics.map(t => {
         const active = (t === '全体表示' && !filterTopic) || (t === filterTopic);
         return `<div class="filter-chip ${active?'active':''}" onclick="filterTopic='${t==='全体表示'?null:t}';renderDashboard()">
@@ -323,14 +333,18 @@
     const topicsToShow = filterTopic ? [filterTopic] : state.topics;
     let rows = [];
 
+    // 表示データの抽出
     topicsToShow.forEach(t => {
+        // 名簿全員をベースにする
         allRosterIds.forEach(sid => {
             const info = state.roster[sid];
             if (filterGroup && info.group !== filterGroup) return; // クラスフィルタ
+            
             const key = `${t}:${sid}`;
             const s = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', alertCount:0 };
             rows.push(s);
         });
+        
         // 名簿外からの接続も表示
         if (!filterGroup) {
             Object.keys(state.studentStates).forEach(k => {
@@ -340,31 +354,39 @@
         }
     });
 
-    // Stats
+    // 統計の計算
     document.getElementById('stat-total').textContent = rows.length;
     document.getElementById('stat-alert').textContent = rows.filter(s=>s.status==='ALERT').length;
     document.getElementById('stat-focus').textContent = rows.filter(s=>s.status==='FOCUS-LOST').length;
     document.getElementById('stat-sessions').textContent = state.topics.length;
 
-    // Table
-    document.getElementById('student-tbody').innerHTML = rows.sort((a,b)=>a.sid.localeCompare(b.sid)).map(s => {
+    // テーブルの描画 (クラス、コード、氏名、試験...の順)
+    document.getElementById('student-tbody').innerHTML = rows.sort((a,b)=>{
+        const ga = (state.roster[a.sid]?.group || '---');
+        const gb = (state.roster[b.sid]?.group || '---');
+        if (ga !== gb) return ga.localeCompare(gb);
+        return a.sid.localeCompare(b.sid);
+    }).map(s => {
         const info = state.roster[s.sid] || { name: '---', group: '---' };
         return `<tr class="${s.status==='ALERT'?'alert-row':''}">
-            <td style="font-size:0.65rem; color:var(--muted);">${s.topic}</td>
             <td><small>${info.group}</small></td>
             <td><b>${s.sid}</b></td>
             <td>${info.name}</td>
+            <td style="font-size:0.65rem; color:var(--muted);">${s.topic}</td>
             <td><span class="pill ${s.status}">${s.status}</span></td>
-            <td>${s.alertCount}</td>
-            <td><button class="btn btn-ghost" style="padding:3px 8px;" onclick="dismissAlert('${s.topic}','${s.sid}')">解除</button></td></tr>`;
+            <td style="text-align:center;">${s.alertCount}</td>
+            <td><button class="btn btn-ghost" style="padding:2px 8px;" onclick="dismissAlert('${s.topic}','${s.sid}')">解除</button></td></tr>`;
     }).join('');
 
-    // Active Alerts Box
+    // アラートボックス
     document.getElementById('active-alerts-list').innerHTML = rows.filter(s=>s.status==='ALERT').map(s=>`
         <div style="background:rgba(239,68,68,0.08); border:1px solid var(--red); padding:10px; border-radius:8px; margin-bottom:8px;">
-            <b>${s.sid}</b> (${s.topic})<br><small>${state.roster[s.sid]?.group || ''}</small>
+            <div style="display:flex; justify-content:space-between;">
+                <b>${s.sid}</b> <span>${state.roster[s.sid]?.group || ''}</span>
+            </div>
+            <div style="font-size:0.7rem; color:var(--muted); margin-top:4px;">${s.topic} / ${new Date(s.lastCheck).toLocaleTimeString()}</div>
         </div>
-    `).join('');
+    `).join('') || '<div style="color:var(--muted); text-align:center;">現在アラートはありません</div>';
   }
 
   function dismissAlert(t, s) { 
@@ -373,7 +395,7 @@
   }
 
   function renderSessionManager() {
-    document.getElementById('session-manager-list').innerHTML = state.topics.map(t => {
+    document.getElementById('session-manager-list').innerHTML = state.topics.sort().map(t => {
       const url = getClientUrl(t);
       return `<div class="card" style="display:flex; justify-content:space-between; align-items:center;">
         <div><b>${t}</b><br><small style="color:var(--muted); cursor:pointer;" onclick="navigator.clipboard.writeText('${url}');alert('コピーしました')">${url}</small></div>
@@ -389,9 +411,12 @@
     return `${u.origin}${bp}client.html?topic=${encodeURIComponent(t)}`;
   }
 
-  function deleteTopic(t) { if(confirm('試験を削除しますか？')){ state.topics=state.topics.filter(x=>x!==t); saveState(); location.reload(); }}
+  function deleteTopic(t) { if(confirm('この試験セッションを削除しますか？')){ state.topics=state.topics.filter(x=>x!==t); saveState(); location.reload(); }}
   async function terminateSession(t) {
-    if(confirm('一括終了しますか？')){ await fetch(`${NTFY_BASE}/${t}`, { method:'POST', body:'FINISH_ALL', headers:{'X-Priority':'5'} }); alert('送信中...'); }
+    if(confirm('このセッションの全受験生に対して試験を終了しますか？')){ 
+        await fetch(`${NTFY_BASE}/${t}`, { method:'POST', body:'FINISH_ALL', headers:{'X-Priority':'5'} }); 
+        alert('終了信号を送信しました'); 
+    }
   }
   window.onload = () => { loadState(); initChart(); renderSessionManager(); renderDashboard(); pollAll(); setInterval(pollAll, POLL_INTERVAL); };
 </script>
