@@ -182,13 +182,20 @@
   }
 
   async function fetchStatusFromDB() {
-      const { data: statusData } = await sb.from('exam_status').select('*');
-      if (statusData) {
-          statusData.forEach(s => {
-              state.studentStates[`${s.topic_id}:${s.sid}`] = { topic: s.topic_id, sid: s.sid, status: s.status, alertCount: s.alert_count };
-          });
+      if (!sb) return;
+      try {
+          const { data: statusData, error } = await sb.from('exam_status').select('*');
+          if (error) throw error;
+          state.studentStates = {};
+          if (statusData) {
+              statusData.forEach(s => {
+                  state.studentStates[`${s.topic_id}:${s.sid}`] = { topic: s.topic_id, sid: s.sid, status: s.status, alertCount: s.alert_count };
+              });
+          }
+          renderDashboard();
+      } catch(e) {
+          console.error('fetchStatusFromDB error:', e);
       }
-      renderDashboard();
   }
 
   function handleLogin() {
@@ -202,6 +209,11 @@
     document.getElementById('main-header').style.display = 'flex';
     document.getElementById('main-viewport').classList.add('visible');
     await initCloud();
+    if (!sb) {
+        document.getElementById('cloud-sync-status').textContent = '● クラウド接続失敗';
+        document.getElementById('cloud-sync-status').style.color = 'var(--red)';
+        return;
+    }
     setInterval(pollAll, 3000);
     setInterval(fetchStatusFromDB, 15000);
   }
@@ -280,6 +292,7 @@
   function getClientUrl(t) { return `${new URL(location.href).origin}/client.html?topic=${encodeURIComponent(t)}`; }
 
   async function pollAll() {
+    if (!sb) return;
     let needsRender = false;
     for (const t of state.topics) {
         try {
