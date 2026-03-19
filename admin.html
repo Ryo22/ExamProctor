@@ -301,11 +301,14 @@
   function deleteTopic(t) { if(confirm('削除しますか？')){ state.topics=state.topics.filter(x=>x!==t); saveAndSync(); } }
 
   async function pollAll() {
+    let isRosterUpdated = false;
+
     for (const t of state.topics) {
         try {
             const resp = await fetch(`${NTFY_BASE}/${t}/json?poll=1&since=${state.lastIds[t] || 'all'}`, { cache: 'no-store' });
             if (!resp.ok) continue;
             const text = await resp.text();
+            
             text.trim().split('\n').filter(Boolean).forEach(line => {
                 const msg = JSON.parse(line);
                 if (msg.event === 'message') {
@@ -313,6 +316,13 @@
                     const parts = msg.message.split(':');
                     const type = parts[0], sid = parts[1];
                     if (!sid) return;
+
+                    // ★ 名簿に存在しない学籍番号からの通信があれば、プレースホルダーとして自動登録する
+                    if (!state.roster[sid]) {
+                        state.roster[sid] = { name: '⚠️ 未登録', group: '未分類' };
+                        isRosterUpdated = true;
+                    }
+
                     if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic: t, sid, status: 'SAFE', alertCount: 0 };
                     const s = state.studentStates[`${t}:${sid}`];
                     if (type === 'ALERT') { s.status = 'ALERT'; s.alertCount++; }
@@ -322,7 +332,13 @@
             });
         } catch(e) {}
     }
-    renderDashboard();
+    
+    // ★ 新規追加があった場合はクラウドへ名簿を保存＆全画面再描画、なければダッシュボードのみ更新
+    if (isRosterUpdated) {
+        saveAndSync();
+    } else {
+        renderDashboard();
+    }
   }
 
   // Filter Helper
@@ -342,7 +358,7 @@
     document.getElementById('group-filter-container').innerHTML = groupHtml;
     
     // セッションフィルタ
-    const otherTopics = [...state.topics].sort();
+    const otherTopics =[...state.topics].sort();
     const topicHtml = `
         <div class="filter-chip filter-all ${(filterTopic === null) ? 'active':''}" onclick="setFilterTopic(null)">全体表示</div>
         ${otherTopics.map(t => `
@@ -359,16 +375,29 @@
         const [t, sid] = key.split(':');
         const rInfo = state.roster[sid];
         const sInfo = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', alertCount:0 };
+        
         if (filterTopic !== null && t !== filterTopic) return;
         if (filterGroup !== null && (!rInfo || rInfo.group !== filterGroup)) return;
-        if (!rInfo && sInfo.status !== 'OFFLINE') unknownCount++;
-        rows.push({ topic: t, sid: sid, name: rInfo ? rInfo.name : '⚠️ 名簿未登録', group: rInfo ? rInfo.group : '---', status: sInfo.status, alertCount: sInfo.alertCount, isUnknown: !rInfo });
+        
+        // 自動追加された「⚠️ 未登録」ユーザーかどうかの判定
+        const isUnknown = rInfo ? (rInfo.name === '⚠️ 未登録') : true; 
+        if (isUnknown && sInfo.status !== 'OFFLINE') unknownCount++;
+
+        rows.push({ 
+            topic: t, 
+            sid: sid, 
+            name: rInfo ? rInfo.name : '⚠️ 未登録', 
+            group: rInfo ? rInfo.group : '未分類', 
+            status: sInfo.status, 
+            alertCount: sInfo.alertCount, 
+            isUnknown: isUnknown 
+        });
     });
 
     document.getElementById('stat-total').textContent = rows.length;
     document.getElementById('stat-alert').textContent = rows.filter(r=>r.status==='ALERT').length;
     document.getElementById('stat-focus').textContent = rows.filter(r=>r.status==='FOCUS-LOST').length;
-    document.getElementById('stat-unknown').textContent = unknownCount;
+    document.getElementById('stat-unknown').textContent = unknownCount; // 名簿外のバッジ数を更新
 
     document.getElementById('student-tbody').innerHTML = rows.sort((a,b)=>a.sid.localeCompare(b.sid)).map(r => `
         <tr class="${r.status==='ALERT'?'alert-row':''} ${r.isUnknown?'unknown-row':''}">
