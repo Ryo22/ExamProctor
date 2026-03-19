@@ -58,6 +58,7 @@
     .btn-green { background: var(--green); color: black; }
     .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-size: 0.75rem; }
     input, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 12px; border-radius: 10px; font-family: inherit; }
+    input:focus { border-color: var(--blue); outline:none; }
     
     .pill { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 0.7rem; }
     .pill.SAFE { background: rgba(34,197,94,0.1); color: var(--green); }
@@ -130,11 +131,12 @@
 
   <div id="page-roster" class="page">
     <div class="card">
+      <h2 id="roster-form-title">名簿登録・一括管理</h2>
       <div style="display:flex; gap:10px; margin-bottom:1rem;">
         <input type="text" id="roster-group" placeholder="クラス"/>
         <input type="text" id="roster-sid" placeholder="学籍番号"/>
         <input type="text" id="roster-name" placeholder="氏名"/>
-        <button class="btn btn-blue" onclick="saveSingleRoster()">個別保存</button>
+        <button class="btn btn-blue" id="roster-save-btn" onclick="saveSingleRoster()">保存</button>
       </div>
       <textarea id="roster-bulk-input" rows="4" placeholder="クラス,学籍番号,氏名形式で一括貼り付け"></textarea>
       <button class="btn btn-green" style="margin-top:10px;" onclick="saveBulkRoster()">一括保存</button>
@@ -181,10 +183,7 @@
     if (!sb) return;
     try {
         const { error } = await sb.from('settings').upsert({ key: 'admin_state', data: { topics: state.topics, roster: state.roster } });
-        if (error) {
-            document.getElementById('cloud-sync-status').textContent = '● 同期失敗';
-            document.getElementById('cloud-sync-status').style.color = 'var(--red)';
-        } else {
+        if (!error) {
             document.getElementById('cloud-sync-status').textContent = '● クラウド同期済み ' + new Date().toLocaleTimeString();
             document.getElementById('cloud-sync-status').style.color = 'var(--green)';
         }
@@ -296,42 +295,26 @@
     renderDashboard();
   }
 
-  // フィルタをセットする関数
-  window.setFilterGroup = function(g) {
-    filterGroup = g;
-    renderDashboard();
-  };
-  window.setFilterTopic = function(t) {
-    filterTopic = t;
-    renderDashboard();
-  };
+  // Filter Helper
+  window.setFilterGroup = (g) => { filterGroup = g; renderDashboard(); };
+  window.setFilterTopic = (t) => { filterTopic = t; renderDashboard(); };
 
   function renderDashboard() {
     const rosterIds = Object.keys(state.roster);
-    
-    // フィルタ配列
-    const otherGroups = [...new Set(rosterIds.map(id => state.roster[id].group))].sort();
-    const groups = ['全体表示', ...otherGroups];
-    const otherTopics = [...state.topics].sort();
-    const ts = ['全体表示', ...otherTopics];
+    const groups = ['全体表示', ...new Set(rosterIds.map(id => state.roster[id].group))].sort();
+    const ts = ['全体表示', ...state.topics].sort();
 
-    // ボタンの描画
     document.getElementById('group-filter-container').innerHTML = groups.map(g => `
         <div class="filter-chip ${(filterGroup === null && g==='全体表示') || filterGroup===g ? 'active':''}" 
              onclick="setFilterGroup(${g === '全体表示' ? 'null' : `'${g}'`})">${g}</div>
     `).join('');
-    
     document.getElementById('topic-filter-container').innerHTML = ts.map(t => `
         <div class="filter-chip ${(filterTopic === null && t==='全体表示') || filterTopic===t ? 'active':''}" 
              onclick="setFilterTopic(${t === '全体表示' ? 'null' : `'${t}'`})">${t}</div>
     `).join('');
 
-    // 表示データの生成
-    const activeStudentKeys = Object.keys(state.studentStates);
-    const allStudentKeysSet = new Set(activeStudentKeys);
-    state.topics.forEach(t => {
-      rosterIds.forEach(sid => { allStudentKeysSet.add(`${t}:${sid}`); });
-    });
+    const allStudentKeysSet = new Set(Object.keys(state.studentStates));
+    state.topics.forEach(t => { rosterIds.forEach(sid => { allStudentKeysSet.add(`${t}:${sid}`); }); });
 
     let rows = [], unknownCount = 0;
     allStudentKeysSet.forEach(key => {
@@ -340,14 +323,8 @@
         const sInfo = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', alertCount:0 };
         if (filterTopic !== null && t !== filterTopic) return;
         if (filterGroup !== null && (!rInfo || rInfo.group !== filterGroup)) return;
-        const isUnknown = !rInfo;
-        if (isUnknown && sInfo.status !== 'OFFLINE') unknownCount++;
-        rows.push({
-            topic: t, sid: sid,
-            name: rInfo ? rInfo.name : '⚠️ 名簿未登録',
-            group: rInfo ? rInfo.group : '---',
-            status: sInfo.status, alertCount: sInfo.alertCount, isUnknown: isUnknown
-        });
+        if (!rInfo && sInfo.status !== 'OFFLINE') unknownCount++;
+        rows.push({ topic: t, sid: sid, name: rInfo ? rInfo.name : '⚠️ 名簿未登録', group: rInfo ? rInfo.group : '---', status: sInfo.status, alertCount: sInfo.alertCount, isUnknown: !rInfo });
     });
 
     document.getElementById('stat-total').textContent = rows.length;
@@ -364,10 +341,52 @@
   }
 
   function dismissAlert(t, s) { if(state.studentStates[`${t}:${s}`]) state.studentStates[`${t}:${s}`].status = 'SAFE'; renderDashboard(); }
-  function saveSingleRoster() { const sid = document.getElementById('roster-sid').value.trim(); const name = document.getElementById('roster-name').value.trim(); const grp = document.getElementById('roster-group').value.trim() || '---'; if(sid && name) { state.roster[sid] = { name, group: grp }; saveAndSync(); } }
-  function saveBulkRoster() { document.getElementById('roster-bulk-input').value.split('\n').filter(l=>l).forEach(line => { const p = line.split(/[,\t]/).map(s=>s.trim()); if (p[0] && p[1] && p[2]) state.roster[p[1]] = { name: p[2], group: p[0] }; }); document.getElementById('roster-bulk-input').value = ''; saveAndSync(); }
-  function renderRosterMaster() { const entries = Object.entries(state.roster).sort((a,b)=>{ if(a[1].group !== b[1].group) return a[1].group.localeCompare(b[1].group); return a[0].localeCompare(b[0]); }); document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `<tr><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td><td><button class="btn btn-red" style="padding:4px 10px; font-size:0.7rem;" onclick="deleteRoster('${sid}')">削除</button></td></tr>`).join(''); }
+  
+  // 📝 Roster Management
+  function editRoster(sid) {
+    const info = state.roster[sid];
+    if (!info) return;
+    document.getElementById('roster-group').value = info.group;
+    document.getElementById('roster-sid').value = sid;
+    document.getElementById('roster-name').value = info.name;
+    document.getElementById('roster-form-title').textContent = '名簿データの編集';
+    document.getElementById('roster-save-btn').textContent = '更新';
+    window.location.hash = 'roster-group';
+    document.getElementById('roster-group').focus();
+  }
+
+  function saveSingleRoster() {
+    const sid = document.getElementById('roster-sid').value.trim();
+    const name = document.getElementById('roster-name').value.trim();
+    const grp = document.getElementById('roster-group').value.trim() || '---';
+    if(sid && name) { 
+        state.roster[sid] = { name, group: grp }; 
+        saveAndSync(); 
+        // フォームリセット
+        document.getElementById('roster-sid').value = '';
+        document.getElementById('roster-name').value = '';
+        document.getElementById('roster-group').value = '';
+        document.getElementById('roster-form-title').textContent = '名簿登録・一括管理';
+        document.getElementById('roster-save-btn').textContent = '保存';
+    }
+  }
+
   function deleteRoster(sid) { if(confirm('削除しますか？')){ delete state.roster[sid]; saveAndSync(); } }
+  function saveBulkRoster() { document.getElementById('roster-bulk-input').value.split('\n').filter(l=>l).forEach(line => { const p = line.split(/[,\t]/).map(s=>s.trim()); if (p[0] && p[1] && p[2]) state.roster[p[1]] = { name: p[2], group: p[0] }; }); document.getElementById('roster-bulk-input').value = ''; saveAndSync(); }
+  function renderRosterMaster() {
+    const entries = Object.entries(state.roster).sort((a,b)=>{
+        if(a[1].group !== b[1].group) return a[1].group.localeCompare(b[1].group);
+        return a[0].localeCompare(b[0]);
+    });
+    document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `
+        <tr>
+            <td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td>
+            <td>
+                <button class="btn btn-ghost" style="padding:4px 10px; font-size:0.75rem; color:var(--blue); border-color:var(--blue);" onclick="editRoster('${sid}')">編集</button>
+                <button class="btn btn-red" style="padding:4px 10px; font-size:0.75rem;" onclick="deleteRoster('${sid}')">削除</button>
+            </td>
+        </tr>`).join('');
+  }
 </script>
 </body>
 </html>
