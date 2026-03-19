@@ -102,7 +102,7 @@
     <div class="dash-grid">
       <div class="grid-left">
         <div class="card" style="padding:1rem;">
-          <h2 style="margin-bottom:0.5rem;">検知トレンド (分単位)</h2>
+          <h2 style="margin-bottom:0.5rem;">検知トレンド</h2>
           <div style="height:150px;"><canvas id="alertChart"></canvas></div>
         </div>
         <div class="card">
@@ -139,24 +139,26 @@
     <div class="card">
       <h2>名簿登録・編集</h2>
       <div class="form-row">
+        <input type="text" id="roster-group" placeholder="クラス (例: JP Class)"/>
         <input type="text" id="roster-sid" placeholder="学籍番号"/>
         <input type="text" id="roster-name" placeholder="氏名"/>
-        <input type="text" id="roster-group" placeholder="クラス (例: JP Class)"/>
         <button class="btn btn-blue" onclick="saveSingleRoster()">保存</button>
         <button class="btn btn-ghost" onclick="clearRosterForm()">クリア</button>
       </div>
       <hr style="border:0.5px solid var(--border); margin-bottom:1.5rem;">
       <h2>一括登録 (貼り付け)</h2>
-      <p style="font-size:0.75rem; color:var(--muted); margin-bottom:0.5rem;">「学籍番号,氏名,クラス」形式で入力。</p>
-      <textarea id="roster-bulk-input" rows="5" placeholder="2024001,田中太郎,JP Class"></textarea>
+      <p style="font-size:0.75rem; color:var(--muted); margin-bottom:0.5rem;">「クラス,学籍番号,氏名」形式で入力。</p>
+      <textarea id="roster-bulk-input" rows="5" placeholder="JP Class,2024001,田中太郎"></textarea>
       <button class="btn btn-green" onclick="saveBulkRoster()">一括保存</button>
     </div>
     <div class="card">
-      <h2>登録済み名簿リスト</h2>
-      <table>
-        <thead><tr><th>学籍番号</th><th>氏名</th><th>クラス</th><th>操作</th></tr></thead>
-        <tbody id="roster-tbody-master"></tbody>
-      </table>
+      <h2>登録済み名簿マスタ</h2>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>操作</th></tr></thead>
+          <tbody id="roster-tbody-master"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -176,7 +178,6 @@
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
         state = { ...state, ...JSON.parse(raw) };
-        // データの互換性チェック
         Object.keys(state.roster).forEach(sid => {
             if (typeof state.roster[sid] === 'string') {
                 state.roster[sid] = { name: state.roster[sid], group: '---' };
@@ -241,7 +242,8 @@
   function saveBulkRoster() {
     document.getElementById('roster-bulk-input').value.split('\n').filter(l=>l).forEach(line => {
         const p = line.split(/[,\t]/).map(s=>s.trim());
-        if (p[0] && p[1]) state.roster[p[0]] = { name: p[1], group: p[2] || '---' };
+        // 固定順: クラス, 学籍番号, 氏名
+        if (p[0] && p[1] && p[2]) state.roster[p[1]] = { name: p[2], group: p[0] };
     });
     document.getElementById('roster-bulk-input').value = '';
     saveState(); renderRosterMaster(); renderDashboard(); alert('名簿を保存しました');
@@ -252,25 +254,34 @@
   }
 
   function deleteRoster(sid) {
-    if(confirm('名簿から削除しますか？')){ delete state.roster[sid]; saveState(); renderRosterMaster(); renderDashboard(); }
+    if(confirm('削除しますか？')){ delete state.roster[sid]; saveState(); renderRosterMaster(); renderDashboard(); }
   }
 
   function editRoster(sid) {
     const info = state.roster[sid];
+    document.getElementById('roster-group').value = info.group || '';
     document.getElementById('roster-sid').value = sid || '';
     document.getElementById('roster-name').value = info.name || '';
-    document.getElementById('roster-group').value = info.group || '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function renderRosterMaster() {
-    const entries = Object.entries(state.roster).sort();
+    // クラス順 -> 学籍番号順 でソート
+    const entries = Object.entries(state.roster).sort((a, b) => {
+        if (a[1].group !== b[1].group) return a[1].group.localeCompare(b[1].group);
+        return a[0].localeCompare(b[0]);
+    });
+    
     document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `
-      <tr><td><b>${sid}</b></td><td>${info.name}</td><td>${info.group}</td>
-          <td>
-            <button class="btn btn-blue" style="padding:4px 10px; font-size:0.7rem;" onclick="editRoster('${sid}')">編集</button>
-            <button class="btn btn-red" style="padding:4px 10px; font-size:0.7rem;" onclick="deleteRoster('${sid}')">削除</button>
-          </td></tr>
+      <tr>
+        <td>${info.group}</td>
+        <td><b>${sid}</b></td>
+        <td>${info.name}</td>
+        <td>
+          <button class="btn btn-blue" style="padding:4px 10px; font-size:0.7rem;" onclick="editRoster('${sid}')">編集</button>
+          <button class="btn btn-red" style="padding:4px 10px; font-size:0.7rem;" onclick="deleteRoster('${sid}')">削除</button>
+        </td>
+      </tr>
     `).join('');
   }
 
@@ -310,8 +321,6 @@
 
   function renderDashboard() {
     const allRosterIds = Object.keys(state.roster);
-    
-    // フィルターUIの生成
     const uniqueGroups = Array.from(new Set(allRosterIds.map(id => state.roster[id].group || '---'))).sort();
     const groups = ['全体表示', ...uniqueGroups];
     const topics = ['全体表示', ...state.topics.sort()];
@@ -333,19 +342,14 @@
     const topicsToShow = filterTopic ? [filterTopic] : state.topics;
     let rows = [];
 
-    // 表示データの抽出
     topicsToShow.forEach(t => {
-        // 名簿全員をベースにする
         allRosterIds.forEach(sid => {
             const info = state.roster[sid];
-            if (filterGroup && info.group !== filterGroup) return; // クラスフィルタ
-            
+            if (filterGroup && info.group !== filterGroup) return;
             const key = `${t}:${sid}`;
             const s = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', alertCount:0 };
             rows.push(s);
         });
-        
-        // 名簿外からの接続も表示
         if (!filterGroup) {
             Object.keys(state.studentStates).forEach(k => {
                 const [top, sid] = k.split(':');
@@ -354,13 +358,11 @@
         }
     });
 
-    // 統計の計算
     document.getElementById('stat-total').textContent = rows.length;
     document.getElementById('stat-alert').textContent = rows.filter(s=>s.status==='ALERT').length;
     document.getElementById('stat-focus').textContent = rows.filter(s=>s.status==='FOCUS-LOST').length;
     document.getElementById('stat-sessions').textContent = state.topics.length;
 
-    // テーブルの描画 (クラス、コード、氏名、試験...の順)
     document.getElementById('student-tbody').innerHTML = rows.sort((a,b)=>{
         const ga = (state.roster[a.sid]?.group || '---');
         const gb = (state.roster[b.sid]?.group || '---');
@@ -378,7 +380,6 @@
             <td><button class="btn btn-ghost" style="padding:2px 8px;" onclick="dismissAlert('${s.topic}','${s.sid}')">解除</button></td></tr>`;
     }).join('');
 
-    // アラートボックス
     document.getElementById('active-alerts-list').innerHTML = rows.filter(s=>s.status==='ALERT').map(s=>`
         <div style="background:rgba(239,68,68,0.08); border:1px solid var(--red); padding:10px; border-radius:8px; margin-bottom:8px;">
             <div style="display:flex; justify-content:space-between;">
@@ -386,7 +387,7 @@
             </div>
             <div style="font-size:0.7rem; color:var(--muted); margin-top:4px;">${s.topic} / ${new Date(s.lastCheck).toLocaleTimeString()}</div>
         </div>
-    `).join('') || '<div style="color:var(--muted); text-align:center;">現在アラートはありません</div>';
+    `).join('') || '<div style="color:var(--muted); text-align:center; padding:10px;">現在アラートはありません</div>';
   }
 
   function dismissAlert(t, s) { 
@@ -411,11 +412,11 @@
     return `${u.origin}${bp}client.html?topic=${encodeURIComponent(t)}`;
   }
 
-  function deleteTopic(t) { if(confirm('この試験セッションを削除しますか？')){ state.topics=state.topics.filter(x=>x!==t); saveState(); location.reload(); }}
+  function deleteTopic(t) { if(confirm('試験を削除しますか？')){ state.topics=state.topics.filter(x=>x!==t); saveState(); location.reload(); }}
   async function terminateSession(t) {
-    if(confirm('このセッションの全受験生に対して試験を終了しますか？')){ 
+    if(confirm('全員の試験を終了しますか？')){ 
         await fetch(`${NTFY_BASE}/${t}`, { method:'POST', body:'FINISH_ALL', headers:{'X-Priority':'5'} }); 
-        alert('終了信号を送信しました'); 
+        alert('送信しました'); 
     }
   }
   window.onload = () => { loadState(); initChart(); renderSessionManager(); renderDashboard(); pollAll(); setInterval(pollAll, POLL_INTERVAL); };
