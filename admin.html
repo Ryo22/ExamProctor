@@ -86,7 +86,6 @@
 
 <main class="app-viewport">
   <div id="page-dash" class="page active">
-    <!-- Stats and Dashboard Content -->
     <div class="stat-row">
         <div class="stat-box"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">監視対象</div></div>
         <div class="stat-box" style="color:var(--red);"><div class="stat-val" id="stat-alert">0</div><div class="stat-lbl">検知中</div></div>
@@ -138,18 +137,18 @@
 
   <div id="page-cloud" class="page">
     <div class="card">
-        <h2>🌩️ クラウド接続設定</h2>
-        <div style="margin-bottom:1rem;"><label style="font-size:0.7rem;">URL:</label><input type="text" id="sb-url" readonly /></div>
-        <div style="margin-bottom:1.5rem;"><label style="font-size:0.7rem;">Key:</label><input type="password" id="sb-key" readonly /></div>
-        <p style="font-size:0.75rem; color:var(--muted);">クラウド連携により、全てのデバイスでリアルタイム同期されます。</p>
+        <h2>🌩️ クラウド接続情報 (東京リージョン)</h2>
+        <div style="margin-bottom:1rem;"><label style="font-size:0.7rem; color:var(--muted);">URL:</label><input type="text" id="sb-url" readonly style="opacity:0.6;" /></div>
+        <div style="margin-bottom:1.5rem;"><label style="font-size:0.7rem; color:var(--muted);">Key:</label><input type="password" id="sb-key" readonly style="opacity:0.6;" /></div>
+        <p style="font-size:0.75rem;">全ての通信は日本国内のサーバーを介してセキュアに同期されます。</p>
     </div>
   </div>
 </main>
 
 <script>
-  // 🌩️ Supabase 設定 (共有情報)
-  const SUPABASE_URL = 'https://gmgxwrypejkqijpboiwf.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtZ3h3cnlwZWprcWlqcGJvaXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODY3MTksImV4cCI6MjA4OTQ2MjcxOX0.95FXm0a44vNB1HxE3TUXly-GM8TvfOnGnzy7W7MoVYg';
+  // 🌩️ Supabase 設定 (東京リージョンの新しい情報)
+  const SUPABASE_URL = 'https://dkjftwhvhsxgcqawemmi.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRramZ0d2h2aHN4Z2NxYXdlbW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODk5MzUsImV4cCI6MjA4OTQ2NTkzNX0.s4lYa3NRpM3ADs5esfVa_fpaAkVj4NLk7MKzgkSKsFo';
   
   let sb = null;
   const NTFY_BASE = 'https://ntfy.sh';
@@ -158,34 +157,47 @@
   let state = { topics: [], roster: {}, studentStates: {}, lastIds: {} };
 
   async function initCloud() {
-    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    document.getElementById('sb-url').value = SUPABASE_URL;
-    document.getElementById('sb-key').value = SUPABASE_KEY;
-    await pullFromCloud();
+    try {
+        sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        document.getElementById('sb-url').value = SUPABASE_URL;
+        document.getElementById('sb-key').value = SUPABASE_KEY;
+        await pullFromCloud();
+    } catch(e) { console.error('Cloud Init Error:', e); }
   }
 
   async function pushToCloud() {
     if (!sb) return;
     try {
-        await sb.from('settings').upsert({ key: 'admin_state', data: { topics: state.topics, roster: state.roster } });
-        document.getElementById('cloud-sync-status').textContent = '● 同期完了 ' + new Date().toLocaleTimeString();
-    } catch(e) { console.error(e); }
+        const { error } = await sb.from('settings').upsert({ key: 'admin_state', data: { topics: state.topics, roster: state.roster } });
+        if (error) throw error;
+        document.getElementById('cloud-sync-status').textContent = '● クラウド保存完了 ' + new Date().toLocaleTimeString();
+        document.getElementById('cloud-sync-status').style.color = 'var(--green)';
+    } catch(e) { 
+        console.error('Push Error:', e);
+        document.getElementById('cloud-sync-status').textContent = '● クラウド保存失敗';
+        document.getElementById('cloud-sync-status').style.color = 'var(--red)';
+    }
   }
 
   async function pullFromCloud() {
     if (!sb) return;
     try {
-        const { data } = await sb.from('settings').select('data').eq('key', 'admin_state').single();
+        const { data, error } = await sb.from('settings').select('data').eq('key', 'admin_state').single();
+        if (error) throw error;
         if (data && data.data) {
             state.topics = data.data.topics || [];
             state.roster = data.data.roster || {};
             renderAll();
+            document.getElementById('cloud-sync-status').textContent = '● クラウド同期済み';
+            document.getElementById('cloud-sync-status').style.color = 'var(--green)';
         }
     } catch(e) {}
   }
 
   function handleLogin() {
-    if (document.getElementById('login-email').value === 'admin@example.com' && document.getElementById('login-pass').value === 'password123') {
+    const email = document.getElementById('login-email').value;
+    const pass = document.getElementById('login-pass').value;
+    if (email === 'admin@example.com' && pass === 'password123') {
         sessionStorage.setItem('admin_logged_in', 'true');
         showAdminApp();
     } else { document.getElementById('login-error').textContent = '認証失敗'; }
@@ -203,8 +215,8 @@
 
   window.onload = () => { if (sessionStorage.getItem('admin_logged_in') === 'true') showAdminApp(); };
 
-  function renderAll() { renderDashboard(); renderSessionManager(); renderRosterMaster(); }
   function saveAndSync() { pushToCloud(); renderAll(); }
+  function renderAll() { renderDashboard(); renderSessionManager(); renderRosterMaster(); }
 
   let filterTopic = null, filterGroup = null;
 
@@ -240,21 +252,18 @@
 
   function copyUrl(t) {
     const el = document.getElementById('url-' + t);
-    el.select();
-    document.execCommand('copy');
-    alert('URLをコピーしました: ' + el.value);
+    el.select(); document.execCommand('copy');
+    alert('コピーしました: ' + el.value);
   }
 
   function getClientUrl(t) {
     const u = new URL(location.href);
-    let bp = u.pathname;
-    // adminclient.html, admin.html を除去して、末尾を / にする
-    bp = bp.replace(/\/adminclient\.html$/, '/').replace(/\/admin\.html$/, '/').replace(/\/admin$/, '/');
+    let bp = u.pathname.replace(/\/adminclient\.html$/, '/').replace(/\/admin\.html$/, '/').replace(/\/admin$/, '/');
     if (!bp.endsWith('/')) bp += '/';
     return `${u.origin}${bp}client.html?topic=${encodeURIComponent(t)}`;
   }
 
-  function deleteTopic(t) { if(confirm('試験セッションを削除しますか？')){ state.topics=state.topics.filter(x=>x!==t); saveAndSync(); } }
+  function deleteTopic(t) { if(confirm('削除しますか？')){ state.topics=state.topics.filter(x=>x!==t); saveAndSync(); } }
 
   async function pollAll() {
     for (const t of state.topics) {
@@ -318,7 +327,7 @@
   function dismissAlert(t, s) { if(state.studentStates[`${t}:${s}`]) state.studentStates[`${t}:${s}`].status = 'SAFE'; renderDashboard(); }
   function saveSingleRoster() { const sid = document.getElementById('roster-sid').value.trim(); const name = document.getElementById('roster-name').value.trim(); const grp = document.getElementById('roster-group').value.trim() || '---'; if(sid && name) { state.roster[sid] = { name, group: grp }; saveAndSync(); } }
   function saveBulkRoster() { document.getElementById('roster-bulk-input').value.split('\n').filter(l=>l).forEach(line => { const p = line.split(/[,\t]/).map(s=>s.trim()); if (p[0] && p[1] && p[2]) state.roster[p[1]] = { name: p[2], group: p[0] }; }); document.getElementById('roster-bulk-input').value = ''; saveAndSync(); }
-  function renderRosterMaster() { const entries = Object.entries(state.roster).sort((a, b) => { if (a[1].group !== b[1].group) return a[1].group.localeCompare(b[1].group); return a[0].localeCompare(b[0]); }); document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `<tr><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td><td><button class="btn btn-red" style="padding:4px 10px; font-size:0.7rem;" onclick="deleteRoster('${sid}')">削除</button></td></tr>`).join(''); }
+  function renderRosterMaster() { const entries = Object.entries(state.roster).sort((a,b)=>{ if(a[1].group !== b[1].group) return a[1].group.localeCompare(b[1].group); return a[0].localeCompare(b[0]); }); document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `<tr><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td><td><button class="btn btn-red" style="padding:4px 10px; font-size:0.7rem;" onclick="deleteRoster('${sid}')">削除</button></td></tr>`).join(''); }
   function deleteRoster(sid) { if(confirm('削除しますか？')){ delete state.roster[sid]; saveAndSync(); } }
 </script>
 </body>
