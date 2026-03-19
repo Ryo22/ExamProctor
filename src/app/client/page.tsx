@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 const NTFY_BASE = 'https://ntfy.sh';
 const CHECK_INTERVAL = 3000;
 const CONNECT_CHECK_URL = 'https://www.google.com/favicon.ico';
 
-export default function ClientPage() {
+/**
+ * URLパラメータを利用するメインコンテンツ
+ */
+function ClientContent() {
     const searchParams = useSearchParams();
     const [topic, setTopic] = useState('');
     const [sid, setSid] = useState('');
@@ -32,10 +35,7 @@ export default function ClientPage() {
         setStatus('MONITORING');
         sendSecureEvent('REGISTER', '開始');
 
-        // 監視ループ開始
         timerRef.current = setInterval(checkConnection, CHECK_INTERVAL);
-
-        // ウィンドウフォーカス検知
         window.onblur = () => sendSecureEvent('FOCUS_LOST', '離脱');
         window.onfocus = () => sendSecureEvent('FOCUS_GAINED', '復帰');
     };
@@ -50,11 +50,8 @@ export default function ClientPage() {
         } catch(e) { online = false; }
 
         if (online) {
-            // 管理者の指示を先に確認 (終了信号があればアラートを出さない)
             const isFinished = await pollAdmin();
             if (!isFinished && status !== 'ALERT') onInternetDetected();
-        } else {
-            if (status === 'ALERT') { /* 戻った場合の処理 */ }
         }
     };
 
@@ -88,7 +85,6 @@ export default function ClientPage() {
     };
 
     const sendSecureEvent = async (type: string, note: string) => {
-        // 🛡️ 重要: ここで /api/notify を通すことで、トピック名を隠蔽する
         try {
             await fetch('/api/notify', {
                 method: 'POST',
@@ -110,7 +106,6 @@ export default function ClientPage() {
         sendSecureEvent('DISMISS', '了解');
     };
 
-    // --- View Components ---
     if (status === 'FINISHED') return (
         <div style={{ background: 'radial-gradient(circle, #1e293b, #0f172a)', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ fontSize: '6rem' }}>🎊</div>
@@ -158,5 +153,16 @@ export default function ClientPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+/**
+ * メインのページコンポーネント
+ */
+export default function ClientPage() {
+    return (
+        <Suspense fallback={<div style={{ padding: '20px', color: 'white' }}>読み込み中...</div>}>
+            <ClientContent />
+        </Suspense>
     );
 }
