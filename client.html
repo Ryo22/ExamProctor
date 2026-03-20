@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>接続確認システム</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -79,31 +80,37 @@
 </div>
 
 <script>
-    const NTFY_BASE = 'https://ntfy.sh';
+    const SUPABASE_URL = 'https://dkjftwhvhsxgcqawemmi.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRramZ0d2h2aHN4Z2NxYXdlbW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODk5MzUsImV4cCI6MjA4OTQ2NTkzNX0.s4lYa3NRpM3ADs5esfVa_fpaAkVj4NLk7MKzgkSKsFo';
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
     let TOPIC = "";
     let SID = "";
     let isAlert = false;
     let monitoringActive = false;
+    let currentStatus = 'OFFLINE';
+    let alertCount = 0;
 
-    // 初期化
     window.onload = function() {
         const params = new URLSearchParams(window.location.search);
         const topicParam = params.get('topic');
         const sidParam = params.get('sid');
-        
         if (topicParam) document.getElementById('input-topic').value = topicParam;
         if (sidParam) document.getElementById('input-sid').value = sidParam;
     };
 
     async function sendEvent(type) {
-        if (!TOPIC) return;
+        if (!TOPIC || !SID) return;
+        if (type === 'ALERT') { currentStatus = 'ALERT'; alertCount++; }
+        else if (type === 'FOCUS_LOST') currentStatus = 'FOCUS-LOST';
+        else if (['REGISTER', 'FOCUS_GAINED', 'DISMISS'].includes(type)) currentStatus = 'SAFE';
         try {
-            await fetch(`${NTFY_BASE}/${TOPIC}`, {
-                method: 'POST',
-                body: `${type}:${SID}`,
-                headers: { 'Title': 'Exam Security Notification' }
-            });
-        } catch (e) {}
+            await sb.from('exam_status').upsert({
+                topic_id: TOPIC, sid: SID,
+                status: currentStatus, alert_count: alertCount,
+                last_seen: new Date().toISOString()
+            }, { onConflict: 'topic_id,sid' });
+        } catch(e) { console.error('sendEvent error:', e); }
     }
 
     function startProctoring() {
