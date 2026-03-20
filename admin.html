@@ -70,6 +70,18 @@
     .pill.OFFLINE { background: var(--border); color: var(--muted); }
     .pill.FINISHED { background: rgba(100,116,139,0.15); color: #94a3b8; }
 
+    /* Table sort & filter */
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover { color: var(--text); }
+    .sort-icon { font-size: 0.6rem; margin-left: 3px; opacity: 0.3; }
+    .sort-icon.active { opacity: 1; color: var(--blue); }
+    .sts-filter { padding: 5px 11px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); cursor: pointer; font-size: 0.72rem; font-weight: 700; transition: 0.15s; white-space: nowrap; }
+    .sts-filter:hover { border-color: var(--muted); }
+    .sts-filter.active           { border-color: var(--blue);  background: rgba(59,130,246,0.1);  color: var(--blue);  }
+    .sts-filter.active[data-s="ALERT"]    { border-color: var(--red);   background: rgba(239,68,68,0.1);   color: var(--red);   }
+    .sts-filter.active[data-s="SAFE"]     { border-color: var(--green); background: rgba(34,197,94,0.1);   color: var(--green); }
+    .sts-filter.active[data-s="FINISHED"] { border-color: var(--muted); background: rgba(100,116,139,0.1); color: #94a3b8;      }
+
     /* Roster Grid */
     #roster-grid { border-collapse: collapse; width: 100%; }
     #roster-grid thead th { background: rgba(255,255,255,0.03); padding: 8px 10px; font-size: 0.68rem; text-transform: uppercase; color: var(--muted); border: 1px solid var(--border); font-weight: 700; letter-spacing: 0.05em; }
@@ -148,16 +160,39 @@
 
     <!-- 受験生一覧 -->
     <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
         <h2>受験生状況一覧</h2>
-        <div style="overflow-x:auto;">
-          <table>
-            <thead><tr>
-              <th>クラス</th><th>学籍番号</th><th>氏名</th><th>試験</th>
-              <th>状態</th><th>回数</th><th>操作</th><th>メモ</th>
-            </tr></thead>
-            <tbody id="student-tbody"></tbody>
-          </table>
+        <span id="table-count-label" style="font-size:0.75rem; color:var(--muted);"></span>
+      </div>
+
+      <!-- 検索・ステータスフィルター -->
+      <div style="display:flex; gap:10px; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
+        <input type="text" id="table-filter-text" placeholder="🔍 学籍番号・氏名・クラス・試験名で絞り込み..."
+          style="flex:1; min-width:200px;" oninput="filterText=this.value; renderStudentTable()"/>
+        <div style="display:flex; gap:5px; flex-wrap:wrap;">
+          <button class="sts-filter active" data-s="" onclick="setStatusFilter(null)">全て</button>
+          <button class="sts-filter" data-s="ALERT"    onclick="setStatusFilter('ALERT')">ALERT</button>
+          <button class="sts-filter" data-s="SAFE"     onclick="setStatusFilter('SAFE')">SAFE</button>
+          <button class="sts-filter" data-s="OFFLINE"  onclick="setStatusFilter('OFFLINE')">OFFLINE</button>
+          <button class="sts-filter" data-s="FINISHED" onclick="setStatusFilter('FINISHED')">FINISHED</button>
         </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr>
+            <th class="sortable" onclick="setSort('group')">クラス<span class="sort-icon" data-col="group">⇅</span></th>
+            <th class="sortable" onclick="setSort('sid')">学籍番号<span class="sort-icon" data-col="sid">⇅</span></th>
+            <th class="sortable" onclick="setSort('name')">氏名<span class="sort-icon" data-col="name">⇅</span></th>
+            <th class="sortable" onclick="setSort('topic')">試験<span class="sort-icon" data-col="topic">⇅</span></th>
+            <th class="sortable" onclick="setSort('status')">状態<span class="sort-icon" data-col="status">⇅</span></th>
+            <th class="sortable" onclick="setSort('count')">回数<span class="sort-icon" data-col="count">⇅</span></th>
+            <th>操作</th>
+            <th>メモ</th>
+          </tr></thead>
+          <tbody id="student-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -445,6 +480,25 @@
 
   // --- ダッシュボード ---
   let fT = null, fG = null;
+  // ソート・フィルター状態
+  let sortCol = 'sid', sortDir = 1;
+  let filterText = '', filterStatus = null;
+  let allTableRows = []; // フィルターチップ適用後の全行（テキスト/ステータスフィルター前）
+
+  function setSort(col) {
+    sortDir = (sortCol === col) ? -sortDir : 1;
+    sortCol = col;
+    renderStudentTable();
+  }
+
+  function setStatusFilter(status) {
+    filterStatus = status;
+    document.querySelectorAll('.sts-filter').forEach(b =>
+      b.classList.toggle('active', b.dataset.s === (status ?? ''))
+    );
+    renderStudentTable();
+  }
+
   function renderDashboard() {
     const rosterIds = Object.keys(state.roster);
     const groups = [...new Set(rosterIds.map(i => state.roster[i].group))].sort((a,b) => a.localeCompare(b, 'ja'));
@@ -456,31 +510,73 @@
       `<div class="filter-chip filter-all ${fT===null?'active':''}" onclick="fT=null;renderDashboard()">全体表示</div>` +
       sortedTopics.map(t => `<div class="filter-chip ${fT===t?'active':''}" onclick="fT='${t}';renderDashboard()">${t}</div>`).join('');
 
+    // フィルターチップ適用後の全行を構築（stat boxはこれを使う）
     const allKeys = new Set(Object.keys(state.studentStates));
     state.topics.forEach(t => rosterIds.forEach(id => { if (state.roster[id].topic === t) allKeys.add(`${t}:${id}`); }));
-    let rows = [], uk = 0;
+    allTableRows = []; let uk = 0;
     allKeys.forEach(key => {
       const [t, sid] = key.split(':'), r = state.roster[sid];
-      const s = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', count:0 };
+      const s = state.studentStates[key] || { status:'OFFLINE', count:0 };
       if (fT!==null && t!==fT) return;
       if (fG!==null && (!r || r.group!==fG)) return;
       if (!r && s.status!=='OFFLINE') uk++;
-      rows.push({ t, sid, name: r?r.name:'⚠️ 名簿未登録', group: r?r.group:'---', status: s.status, count: s.count, isUk: !r });
+      allTableRows.push({ t, sid, name: r?r.name:'⚠️ 名簿未登録', group: r?r.group:'---', status: s.status, count: s.count, isUk: !r });
     });
-    document.getElementById('stat-unknown').textContent = uk;
-    document.getElementById('stat-total').textContent = rows.length;
-    document.getElementById('stat-alert').textContent = rows.filter(r=>r.status==='ALERT').length;
 
-    document.getElementById('student-tbody').innerHTML = rows
-      .sort((a,b) => a.sid.localeCompare(b.sid))
-      .map(r => `
+    // Stat boxes はテキスト/ステータスフィルター前の全体数を表示
+    document.getElementById('stat-unknown').textContent = uk;
+    document.getElementById('stat-total').textContent = allTableRows.length;
+    document.getElementById('stat-alert').textContent = allTableRows.filter(r=>r.status==='ALERT').length;
+
+    buildChartTabs();
+    renderStudentTable();
+  }
+
+  function renderStudentTable() {
+    // テキスト・ステータスフィルター適用
+    let rows = [...allTableRows];
+    if (filterText.trim()) {
+      const q = filterText.trim().toLowerCase();
+      rows = rows.filter(r =>
+        r.sid.toLowerCase().includes(q)   ||
+        r.name.toLowerCase().includes(q)  ||
+        r.group.toLowerCase().includes(q) ||
+        r.t.toLowerCase().includes(q)
+      );
+    }
+    if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
+
+    // ソート
+    const statusOrder = { ALERT:4, SAFE:3, OFFLINE:2, FINISHED:1 };
+    rows.sort((a, b) => {
+      let cmp = 0;
+      if (sortCol === 'count')  cmp = a.count - b.count;
+      else if (sortCol === 'status') cmp = (statusOrder[a.status]||0) - (statusOrder[b.status]||0);
+      else cmp = (a[sortCol]||'').localeCompare(b[sortCol]||'', 'ja');
+      return cmp * sortDir;
+    });
+
+    // ソートアイコン更新
+    document.querySelectorAll('.sort-icon').forEach(el => {
+      const isActive = el.dataset.col === sortCol;
+      el.textContent = isActive ? (sortDir === 1 ? ' ▲' : ' ▼') : ' ⇅';
+      el.classList.toggle('active', isActive);
+    });
+
+    // 件数ラベル
+    const isFiltered = filterText.trim() || filterStatus;
+    document.getElementById('table-count-label').textContent =
+      isFiltered ? `${rows.length} / ${allTableRows.length} 件` : `${rows.length} 件`;
+
+    // tbody描画
+    document.getElementById('student-tbody').innerHTML = rows.map(r => `
       <tr class="${r.status==='ALERT'?'alert-row':''} ${r.isUk?'unknown-row':''}">
         <td><small>${r.group}</small></td>
         <td><b>${r.sid}</b></td>
         <td>${r.name}</td>
         <td>${r.t}</td>
         <td><span class="pill ${r.status}">${r.status}</span></td>
-        <td>${r.count}</td>
+        <td style="text-align:center;">${r.count}</td>
         <td style="display:flex; gap:5px; flex-wrap:wrap;">
           <button class="btn btn-detail" onclick="showDetail('${r.t}','${r.sid}')">詳細を見る</button>
           <button class="btn btn-ghost" onclick="dismissAlert('${r.t}','${r.sid}')">解除</button>
@@ -488,8 +584,6 @@
         </td>
         <td><input type="text" class="memo-input" value="${(state.memos[r.sid]||'').replace(/"/g,'&quot;')}" onblur="updateMemo('${r.sid}', this.value)" placeholder="メモ..."/></td>
       </tr>`).join('');
-
-    buildChartTabs();  // グループが変わったときにタブも更新
   }
 
   async function updateMemo(sid, v) {
