@@ -267,20 +267,38 @@
 
   // --- ntfy.sh ポーリング ---
   let lastPollUpdate = 0;
+  async function fetchNtfy(url) {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 6000);
+    try {
+      const r = await fetch(url, { signal: controller.signal });
+      if (!r.ok) { clearTimeout(tid); return ''; }
+      // r.text() がストリームで詰まる場合があるため Promise.race でタイムアウト
+      const text = await Promise.race([
+        r.text(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('body timeout')), 5000))
+      ]);
+      clearTimeout(tid);
+      return text;
+    } catch(e) {
+      clearTimeout(tid);
+      return '';
+    }
+  }
+
   async function pollAll() {
     const NTFY_BASE = 'https://ntfy.sh';
     for (const t of state.topics) {
       try {
-        const r = await fetch(`${NTFY_BASE}/${t}/json?poll=1&since=${state.lastIds[t] || 'all'}`);
-        if (!r.ok) continue;
-        const text = await r.text();
+        const text = await fetchNtfy(`${NTFY_BASE}/${t}/json?poll=1&since=${state.lastIds[t] || 'all'}`);
         const upserts = [];
         text.trim().split('\n').filter(Boolean).forEach(line => {
           try {
             const m = JSON.parse(line);
             if (m.event === 'message') {
               state.lastIds[t] = m.id;
-              const p = m.message.split(':'), type = p[0], sid = p[1];
+              const parts = m.message.split(':');
+              const type = parts[0], sid = parts.slice(1).join(':');
               if (!sid) return;
               if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic: t, sid, status: 'SAFE', count: 0 };
               const s = state.studentStates[`${t}:${sid}`];
@@ -292,7 +310,7 @@
           } catch(parseErr) {}
         });
         if (upserts.length > 0) {
-          renderDashboard(); // 先にUIを更新
+          renderDashboard();
           const { error } = await sb.from('exam_status').upsert(upserts, { onConflict: 'topic_id,sid' });
           if (error) {
             console.error('exam_status upsert error:', error);
@@ -314,9 +332,10 @@
   let fT = null, fG = null;
   function renderDashboard() {
     const rosterIds = Object.keys(state.roster);
-    const groups = [...new Set(rosterIds.map(i => state.roster[i].group))].sort();
+    const groups = [...new Set(rosterIds.map(i => state.roster[i].group))].sort((a,b) => a.localeCompare(b, 'ja'));
     document.getElementById('group-filter-container').innerHTML = `<div class="filter-chip filter-all ${fG===null?'active':''}" onclick="fG=null;renderDashboard()">全体表示</div>` + groups.map(g => `<div class="filter-chip ${fG===g?'active':''}" onclick="fG='${g}';renderDashboard()">${g}</div>`).join('');
-    document.getElementById('topic-filter-container').innerHTML = `<div class="filter-chip filter-all ${fT===null?'active':''}" onclick="fT=null;renderDashboard()">全体表示</div>` + state.topics.map(t => `<div class="filter-chip ${fT===t?'active':''}" onclick="fT='${t}';renderDashboard()">${t}</div>`).join('');
+    const sortedTopics = [...state.topics].sort((a,b) => a.localeCompare(b, 'ja'));
+    document.getElementById('topic-filter-container').innerHTML = `<div class="filter-chip filter-all ${fT===null?'active':''}" onclick="fT=null;renderDashboard()">全体表示</div>` + sortedTopics.map(t => `<div class="filter-chip ${fT===t?'active':''}" onclick="fT='${t}';renderDashboard()">${t}</div>`).join('');
 
     const allKeys = new Set(Object.keys(state.studentStates));
     state.topics.forEach(t => rosterIds.forEach(id => { if (state.roster[id].topic === t) allKeys.add(`${t}:${id}`); }));
