@@ -99,18 +99,17 @@
         if (sidParam) document.getElementById('input-sid').value = sidParam;
     };
 
-    async function sendEvent(type) {
+    function sendEvent(type) {
         if (!TOPIC || !SID) return;
         if (type === 'ALERT') { currentStatus = 'ALERT'; alertCount++; }
         else if (type === 'FOCUS_LOST') currentStatus = 'FOCUS-LOST';
         else if (['REGISTER', 'FOCUS_GAINED', 'DISMISS'].includes(type)) currentStatus = 'SAFE';
-        try {
-            await sb.from('exam_status').upsert({
-                topic_id: TOPIC, sid: SID,
-                status: currentStatus, alert_count: alertCount,
-                last_seen: new Date().toISOString()
-            }, { onConflict: 'topic_id,sid' });
-        } catch(e) { console.error('sendEvent error:', e); }
+        // fire-and-forget: awaitしないことで遅延ゼロ
+        sb.from('exam_status').upsert({
+            topic_id: TOPIC, sid: SID,
+            status: currentStatus, alert_count: alertCount,
+            last_seen: new Date().toISOString()
+        }, { onConflict: 'topic_id,sid' }).catch(e => console.error('sendEvent error:', e));
     }
 
     function startProctoring() {
@@ -131,7 +130,7 @@
         monitoringActive = true;
         updateUI('MONITORING');
         sendEvent('REGISTER');
-        setInterval(checkConnection, 3000);
+        setInterval(checkConnection, 1000);
     }
 
     function updateUI(status) {
