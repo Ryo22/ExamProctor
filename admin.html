@@ -37,7 +37,7 @@
     .page.active { display: block; }
 
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem; }
-    .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
     .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; text-align: center; }
     .stat-val { font-size: 1.8rem; font-weight: 900; line-height: 1; }
     
@@ -66,7 +66,6 @@
     .pill { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 0.7rem; }
     .pill.SAFE { background: rgba(34,197,94,0.1); color: var(--green); }
     .pill.ALERT { background: rgba(239,68,68,0.1); color: var(--red); }
-    .pill.FOCUS-LOST { background: rgba(59,130,246,0.1); color: var(--blue); }
     .pill.OFFLINE { background: var(--border); color: var(--muted); }
     .pill.FINISHED { background: rgba(100,116,139,0.15); color: #94a3b8; }
   </style>
@@ -99,8 +98,7 @@
   <div id="page-dash" class="page active">
     <div class="stat-row">
         <div class="stat-box"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">監視対象</div></div>
-        <div class="stat-box" style="color:var(--red);"><div class="stat-val" id="stat-alert">0</div><div class="stat-lbl">検知中</div></div>
-        <div class="stat-box" style="color:var(--blue);"><div class="stat-val" id="stat-focus">0</div><div class="stat-lbl">離脱中</div></div>
+        <div class="stat-box" style="color:var(--red);"><div class="stat-val" id="stat-alert">0</div><div class="stat-lbl">オンライン検知中</div></div>
         <div class="stat-box" style="color:var(--muted);"><div class="stat-val" id="stat-unknown">0</div><div class="stat-lbl">名簿外</div></div>
     </div>
     <div id="filter-section">
@@ -190,7 +188,7 @@
       });
 
       // 直近8秒以内にpollUpdateがあった場合はローカル状態を優先してマージ
-      const statusSeverity = { 'OFFLINE': 0, 'SAFE': 1, 'FOCUS-LOST': 2, 'ALERT': 3 };
+      const statusSeverity = { 'OFFLINE': 0, 'SAFE': 1, 'ALERT': 2, 'FINISHED': 3 };
       if (Date.now() - lastPollUpdate > 8000) {
         state.studentStates = {};
       }
@@ -308,7 +306,6 @@
     });
     document.getElementById('stat-unknown').textContent = uk; document.getElementById('stat-total').textContent = rows.length;
     document.getElementById('stat-alert').textContent = rows.filter(r=>r.status==='ALERT').length;
-    document.getElementById('stat-focus').textContent = rows.filter(r=>r.status==='FOCUS-LOST').length;
 
     document.getElementById('student-tbody').innerHTML = rows.sort((a,b)=>a.sid.localeCompare(b.sid)).map(r => `
       <tr class="${r.status==='ALERT'?'alert-row':''} ${r.isUk?'unknown-row':''}">
