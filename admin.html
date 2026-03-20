@@ -154,51 +154,61 @@
   let sb = null, POLL_INTERVAL = 3000;
   let state = { topics: [], roster: {}, studentStates: {}, memos: {}, lastIds: {} };
 
+  function setStatus(msg, color) {
+    const el = document.getElementById('cloud-sync-status');
+    el.textContent = msg; el.style.color = color;
+  }
+
   async function initCloud() {
     sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     document.getElementById('sb-url').value = SUPABASE_URL;
     await pullFromCloud();
   }
-  async function pushToCloud() {
-    if (!sb) return;
-    try {
-        const { error } = await sb.from('settings').upsert(
-            { key: 'admin_state', data: { topics: state.topics, roster: state.roster, memos: state.memos, studentStates: state.studentStates, lastIds: state.lastIds } },
-            { onConflict: 'key' }
-        );
-        if (error) throw error;
-        document.getElementById('cloud-sync-status').textContent = '● 同期済み ' + new Date().toLocaleTimeString();
-        document.getElementById('cloud-sync-status').style.color = 'var(--green)';
-    } catch(e) {
-        document.getElementById('cloud-sync-status').textContent = '✗ 同期失敗: ' + (e.message || e);
-        document.getElementById('cloud-sync-status').style.color = 'var(--red)';
-        console.error('pushToCloud error:', e);
-    }
-  }
+
+  // --- クラウド読み込み（3テーブルから再構築）---
   async function pullFromCloud() {
     if (!sb) return;
     try {
-        const { data, error } = await sb.from('settings').select('data').eq('key', 'admin_state');
-        if (error) throw error;
-        if (data && data[0]?.data) {
-            const d = data[0].data;
-            state.topics = d.topics || []; state.roster = d.roster || {}; state.memos = d.memos || {};
-            state.studentStates = d.studentStates || {}; state.lastIds = d.lastIds || {};
-            renderAll();
-        }
+      const [sessRes, studRes, statRes] = await Promise.all([
+        sb.from('sessions').select('*'),
+        sb.from('students').select('*'),
+        sb.from('exam_status').select('*')
+      ]);
+      if (sessRes.error) throw sessRes.error;
+      if (studRes.error) throw studRes.error;
+      if (statRes.error) throw statRes.error;
+
+      state.topics = (sessRes.data || []).map(s => s.topic_id);
+      state.lastIds = {};
+      (sessRes.data || []).forEach(s => { state.lastIds[s.topic_id] = s.last_ntfy_id || ''; });
+
+      state.roster = {}; state.memos = {};
+      (studRes.data || []).forEach(s => {
+        state.roster[s.sid] = { name: s.name, group: s.class_group, topic: s.topic_id || '' };
+        state.memos[s.sid] = s.memo || '';
+      });
+
+      state.studentStates = {};
+      (statRes.data || []).forEach(s => {
+        state.studentStates[`${s.topic_id}:${s.sid}`] = { topic: s.topic_id, sid: s.sid, status: s.status, count: s.alert_count };
+      });
+
+      renderAll();
+      setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
     } catch(e) {
-        document.getElementById('cloud-sync-status').textContent = '✗ 読込失敗: ' + (e.message || e);
-        document.getElementById('cloud-sync-status').style.color = 'var(--red)';
-        console.error('pullFromCloud error:', e);
+      setStatus('✗ 読込失敗: ' + (e.message || e), 'var(--red)');
+      console.error('pullFromCloud error:', e);
     }
   }
+
   function handleLogin() { if(document.getElementById('login-email').value==='admin@example.com' && document.getElementById('login-pass').value==='password123') { sessionStorage.setItem('admin_logged_in','true'); showAdminApp(); } }
   async function showAdminApp() {
     document.getElementById('login-screen').style.display='none';
     document.querySelector('.app-header').style.display='flex';
     document.querySelector('.app-viewport').classList.add('visible');
     await initCloud();
-    setInterval(pollAll, POLL_INTERVAL); setInterval(pullFromCloud, 10000);
+    setInterval(pollAll, POLL_INTERVAL);
+    setInterval(pullFromCloud, 10000);
   }
   window.onload = () => { if(sessionStorage.getItem('admin_logged_in')==='true') showAdminApp(); };
 
@@ -209,9 +219,18 @@
   document.querySelectorAll('.nav-tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
   function renderAll() { renderDashboard(); renderSessionManager(); renderRosterMaster(); }
-  function saveAndSync() { pushToCloud(); renderAll(); }
-  function addTopic() { const v = document.getElementById('new-topic-input').value.trim(); if(v && !state.topics.includes(v)){ state.topics.push(v); saveAndSync(); document.getElementById('new-topic-input').value=''; } }
-  
+
+  // --- 試験セッション ---
+  async function addTopic() {
+    const v = document.getElementById('new-topic-input').value.trim();
+    if (!v || state.topics.includes(v)) return;
+    const { error } = await sb.from('sessions').insert({ topic_id: v, last_ntfy_id: '' });
+    if (error) { setStatus('✗ 保存失敗: ' + error.message, 'var(--red)'); return; }
+    state.topics.push(v); state.lastIds[v] = '';
+    document.getElementById('new-topic-input').value = '';
+    renderAll(); setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
+  }
+
   function renderSessionManager() {
     const list = document.getElementById('session-manager-list');
     list.innerHTML = state.topics.sort().map(t => {
@@ -220,41 +239,58 @@
         <div><b>${t}</b><div style="display:flex; gap:8px; margin-top:5px;"><input type="text" value="${u}" readonly style="font-size:0.65rem; width:250px;" id="u-${t}"/><button class="btn btn-ghost" onclick="const e=document.getElementById('u-${t}');e.select();document.execCommand('copy');alert('コピー完了');">コピー</button></div></div>
         <button class="btn btn-red" onclick="deleteTopic('${t}')">削除</button></div>`;
     }).join('');
-    // 名簿用のセレクトボックスを更新
     const sel = document.getElementById('roster-topic-select');
     const oldVal = sel.value;
     sel.innerHTML = state.topics.sort().map(t => `<option value="${t}">${t}</option>`).join('');
     if(oldVal && state.topics.includes(oldVal)) sel.value = oldVal;
   }
-  function deleteTopic(t) { if(confirm('削除しますか？')){ state.topics = state.topics.filter(x=>x!==t); saveAndSync(); } }
 
+  async function deleteTopic(t) {
+    if (!confirm('削除しますか？')) return;
+    await sb.from('exam_status').delete().eq('topic_id', t);
+    await sb.from('students').update({ topic_id: null }).eq('topic_id', t);
+    const { error } = await sb.from('sessions').delete().eq('topic_id', t);
+    if (error) { setStatus('✗ 削除失敗: ' + error.message, 'var(--red)'); return; }
+    state.topics = state.topics.filter(x => x !== t);
+    delete state.lastIds[t];
+    Object.keys(state.studentStates).forEach(k => { if (k.startsWith(t + ':')) delete state.studentStates[k]; });
+    Object.keys(state.roster).forEach(sid => { if (state.roster[sid].topic === t) state.roster[sid].topic = ''; });
+    renderAll(); setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
+  }
+
+  // --- ntfy.sh ポーリング ---
   async function pollAll() {
     const NTFY_BASE = 'https://ntfy.sh';
-    let changed = false;
     for (const t of state.topics) {
       try {
         const r = await fetch(`${NTFY_BASE}/${t}/json?poll=1&since=${state.lastIds[t] || 'all'}`);
         if (!r.ok) continue;
         const text = await r.text();
+        const upserts = [];
         text.trim().split('\n').filter(Boolean).forEach(line => {
           const m = JSON.parse(line);
           if (m.event === 'message') {
             state.lastIds[t] = m.id;
             const p = m.message.split(':'), type = p[0], sid = p[1];
             if (!sid) return;
-            if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic:t, sid, status:'SAFE', count:0 };
+            if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic: t, sid, status: 'SAFE', count: 0 };
             const s = state.studentStates[`${t}:${sid}`];
             if (type === 'ALERT') { s.status = 'ALERT'; s.count++; }
             else if (type === 'FOCUS_LOST') s.status = 'FOCUS-LOST';
             else if (['REGISTER','FOCUS_GAINED','DISMISS'].includes(type)) s.status = 'SAFE';
-            changed = true;
+            upserts.push({ topic_id: t, sid, status: s.status, alert_count: s.count, last_seen: new Date().toISOString() });
           }
         });
+        if (upserts.length > 0) {
+          await sb.from('exam_status').upsert(upserts, { onConflict: 'topic_id,sid' });
+          await sb.from('sessions').update({ last_ntfy_id: state.lastIds[t] }).eq('topic_id', t);
+        }
       } catch(e) {}
     }
-    if (changed) { renderDashboard(); pushToCloud(); } else { renderDashboard(); }
+    renderDashboard();
   }
 
+  // --- ダッシュボード ---
   let fT = null, fG = null;
   function renderDashboard() {
     const rosterIds = Object.keys(state.roster);
@@ -280,13 +316,27 @@
         <td><small>${r.group}</small></td><td><b>${r.sid}</b></td><td>${r.name}</td><td>${r.t}</td>
         <td><span class="pill ${r.status}">${r.status}</span></td><td>${r.count}</td>
         <td style="display:flex; gap:5px;"><button class="btn btn-ghost" onclick="dismissAlert('${r.t}','${r.sid}')">解除</button><button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${r.sid}')">編集</button></td>
-        <td><input type="text" class="memo-input" value="${state.memos[r.sid]||''}" onblur="updateMemo('${r.sid}', this.value)" placeholder="メモ..."/></td>
+        <td><input type="text" class="memo-input" value="${(state.memos[r.sid]||'').replace(/"/g,'&quot;')}" onblur="updateMemo('${r.sid}', this.value)" placeholder="メモ..."/></td>
       </tr>`).join('');
   }
 
-  function updateMemo(sid, v) { state.memos[sid] = v; pushToCloud(); }
-  function dismissAlert(t, s) { if(state.studentStates[`${t}:${s}`]) { state.studentStates[`${t}:${s}`].status = 'SAFE'; saveAndSync(); } }
-  
+  async function updateMemo(sid, v) {
+    state.memos[sid] = v;
+    const { error } = await sb.from('students').update({ memo: v }).eq('sid', sid);
+    if (error) setStatus('✗ メモ保存失敗: ' + error.message, 'var(--red)');
+    else setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
+  }
+
+  async function dismissAlert(t, s) {
+    if (!state.studentStates[`${t}:${s}`]) return;
+    state.studentStates[`${t}:${s}`].status = 'SAFE';
+    const { error } = await sb.from('exam_status').update({ status: 'SAFE' }).eq('topic_id', t).eq('sid', s);
+    if (error) setStatus('✗ 更新失敗: ' + error.message, 'var(--red)');
+    else setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
+    renderDashboard();
+  }
+
+  // --- 名簿 ---
   function editRoster(sid) {
     const info = state.roster[sid] || { group:'', name:'', topic:'' };
     document.getElementById('roster-group').value = info.group;
@@ -298,26 +348,36 @@
     switchTab('page-roster'); document.getElementById('roster-group').focus();
   }
 
-  function saveSingleRoster() {
-    const sid = document.getElementById('roster-sid').value.trim(), name = document.getElementById('roster-name').value.trim();
-    const grp = document.getElementById('roster-group').value.trim() || '---', t = document.getElementById('roster-topic-select').value;
-    if(sid && name) { 
-        state.roster[sid] = { name, group: grp, topic: t }; 
-        saveAndSync(); 
-        document.getElementById('roster-sid').value=''; document.getElementById('roster-name').value=''; 
-        // 試験名とクラスは消さずに残す
-    }
+  async function saveSingleRoster() {
+    const sid = document.getElementById('roster-sid').value.trim();
+    const name = document.getElementById('roster-name').value.trim();
+    const class_group = document.getElementById('roster-group').value.trim() || '---';
+    const topic_id = document.getElementById('roster-topic-select').value;
+    if (!sid || !name) return;
+    const { error } = await sb.from('students').upsert({ sid, name, class_group, topic_id, memo: state.memos[sid] || '' });
+    if (error) { setStatus('✗ 保存失敗: ' + error.message, 'var(--red)'); return; }
+    state.roster[sid] = { name, group: class_group, topic: topic_id };
+    document.getElementById('roster-sid').value = ''; document.getElementById('roster-name').value = '';
+    renderAll(); setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
   }
 
-  function saveBulkRoster() {
-    const grp = document.getElementById('roster-group').value.trim() || '---', t = document.getElementById('roster-topic-select').value;
-    const lines = document.getElementById('roster-bulk-input').value.split('\n').filter(l=>l);
+  async function saveBulkRoster() {
+    const class_group = document.getElementById('roster-group').value.trim() || '---';
+    const topic_id = document.getElementById('roster-topic-select').value;
+    const lines = document.getElementById('roster-bulk-input').value.split('\n').filter(l => l);
+    const records = [];
     lines.forEach(line => {
-      const p = line.split(/[,\t\s]+/).filter(Boolean); // カンマ、タブ、スペースに対応
-      if (p[0] && p[1]) state.roster[p[0]] = { name: p[1], group: grp, topic: t };
+      const p = line.split(/[,\t\s]+/).filter(Boolean);
+      if (p[0] && p[1]) {
+        records.push({ sid: p[0], name: p[1], class_group, topic_id, memo: state.memos[p[0]] || '' });
+        state.roster[p[0]] = { name: p[1], group: class_group, topic: topic_id };
+      }
     });
+    if (records.length === 0) return;
+    const { error } = await sb.from('students').upsert(records);
+    if (error) { setStatus('✗ 保存失敗: ' + error.message, 'var(--red)'); return; }
     document.getElementById('roster-bulk-input').value = '';
-    saveAndSync();
+    renderAll(); setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
   }
 
   function renderRosterMaster() {
@@ -325,7 +385,17 @@
     const ukSids = [...new Set(Object.keys(state.studentStates).map(k=>k.split(':')[1]).filter(sid => !state.roster[sid]))].sort();
     document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `<tr><td>${info.topic||'---'}</td><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td><td><button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${sid}')">編集</button> <button class="btn btn-red" onclick="deleteRoster('${sid}')">削除</button></td></tr>`).join('') + ukSids.map(sid => `<tr class="unknown-row"><td>---</td><td>---</td><td><b>${sid}</b></td><td>⚠️ 未登録</td><td><button class="btn btn-blue" onclick="editRoster('${sid}')">登録</button></td></tr>`).join('');
   }
-  function deleteRoster(sid) { if(confirm('削除しますか？')){ delete state.roster[sid]; saveAndSync(); } }
+
+  async function deleteRoster(sid) {
+    if (!confirm('削除しますか？')) return;
+    await sb.from('exam_status').delete().eq('sid', sid);
+    const { error } = await sb.from('students').delete().eq('sid', sid);
+    if (error) { setStatus('✗ 削除失敗: ' + error.message, 'var(--red)'); return; }
+    delete state.roster[sid]; delete state.memos[sid];
+    renderAll(); setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
+  }
+
+  function syncNow() { pullFromCloud(); }
 </script>
 </body>
 </html>
