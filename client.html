@@ -106,11 +106,14 @@
         else if (type === 'END') currentStatus = 'FINISHED';
         else if (['REGISTER', 'DISMISS'].includes(type)) currentStatus = 'SAFE';
         // fire-and-forget: awaitしないことで遅延ゼロ
-        sb.from('exam_status').upsert({
-            topic_id: TOPIC, sid: SID,
-            status: currentStatus, alert_count: alertCount,
-            last_seen: new Date().toISOString()
-        }, { onConflict: 'topic_id,sid' }).catch(e => console.error('sendEvent error:', e));
+        (async () => {
+            const { error } = await sb.from('exam_status').upsert({
+                topic_id: TOPIC, sid: SID,
+                status: currentStatus, alert_count: alertCount,
+                last_seen: new Date().toISOString()
+            }, { onConflict: 'topic_id,sid' });
+            if (error) console.error('sendEvent error:', error);
+        })();
     }
 
     function startProctoring() {
