@@ -217,8 +217,8 @@
     document.querySelector('.app-header').style.display='flex';
     document.querySelector('.app-viewport').classList.add('visible');
     await initCloud();
-    setInterval(pollAll, POLL_INTERVAL);
-    setInterval(pullFromCloud, 10000);
+    subscribeAll();
+    setInterval(pullFromCloud, 30000);
   }
   window.onload = () => { if(sessionStorage.getItem('admin_logged_in')==='true') showAdminApp(); };
 
@@ -237,6 +237,7 @@
     const { error } = await sb.from('sessions').insert({ topic_id: v, last_ntfy_id: '' });
     if (error) { setStatus('✗ 保存失敗: ' + error.message, 'var(--red)'); return; }
     state.topics.push(v); state.lastIds[v] = '';
+    subscribeToTopic(v);
     document.getElementById('new-topic-input').value = '';
     renderAll(); setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
   }
@@ -260,72 +261,59 @@
     if (error) { setStatus('✗ 削除失敗: ' + error.message, 'var(--red)'); return; }
     state.topics = state.topics.filter(x => x !== t);
     delete state.lastIds[t];
+    if (eventSources[t]) { eventSources[t].close(); delete eventSources[t]; }
     Object.keys(state.studentStates).forEach(k => { if (k.startsWith(t + ':')) delete state.studentStates[k]; });
     Object.keys(state.roster).forEach(sid => { if (state.roster[sid].topic === t) state.roster[sid].topic = ''; });
     renderAll(); setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
   }
 
-  // --- ntfy.sh ポーリング ---
+  // --- ntfy.sh SSE リアルタイム購読 ---
   let lastPollUpdate = 0;
-  async function fetchNtfy(url) {
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 6000);
-    try {
-      const r = await fetch(url, { signal: controller.signal });
-      if (!r.ok) { clearTimeout(tid); return ''; }
-      // r.text() がストリームで詰まる場合があるため Promise.race でタイムアウト
-      const text = await Promise.race([
-        r.text(),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('body timeout')), 5000))
-      ]);
-      clearTimeout(tid);
-      return text;
-    } catch(e) {
-      clearTimeout(tid);
-      return '';
-    }
+  const eventSources = {};
+
+  function subscribeAll() {
+    state.topics.forEach(t => { if (!eventSources[t]) subscribeToTopic(t); });
   }
 
-  async function pollAll() {
-    const NTFY_BASE = 'https://ntfy.sh';
-    for (const t of state.topics) {
+  function subscribeToTopic(t) {
+    if (eventSources[t]) { eventSources[t].close(); delete eventSources[t]; }
+    const since = state.lastIds[t] || 'all';
+    const es = new EventSource(`https://ntfy.sh/${t}/sse?since=${since}`);
+    eventSources[t] = es;
+
+    es.addEventListener('message', async (event) => {
       try {
-        const text = await fetchNtfy(`${NTFY_BASE}/${t}/json?poll=1&since=${state.lastIds[t] || 'all'}`);
-        const upserts = [];
-        text.trim().split('\n').filter(Boolean).forEach(line => {
-          try {
-            const m = JSON.parse(line);
-            if (m.event === 'message') {
-              state.lastIds[t] = m.id;
-              const parts = m.message.split(':');
-              const type = parts[0], sid = parts.slice(1).join(':');
-              if (!sid) return;
-              if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic: t, sid, status: 'SAFE', count: 0 };
-              const s = state.studentStates[`${t}:${sid}`];
-              if (type === 'ALERT') { s.status = 'ALERT'; s.count++; }
-              else if (type === 'FOCUS_LOST') s.status = 'FOCUS-LOST';
-              else if (['REGISTER','FOCUS_GAINED','DISMISS'].includes(type)) s.status = 'SAFE';
-              upserts.push({ topic_id: t, sid, status: s.status, alert_count: s.count, last_seen: new Date().toISOString() });
-            }
-          } catch(parseErr) {}
-        });
-        if (upserts.length > 0) {
-          renderDashboard();
-          const { error } = await sb.from('exam_status').upsert(upserts, { onConflict: 'topic_id,sid' });
-          if (error) {
-            console.error('exam_status upsert error:', error);
-            setStatus('✗ 状態保存失敗: ' + error.message, 'var(--red)');
-          } else {
-            lastPollUpdate = Date.now();
-            await sb.from('sessions').update({ last_ntfy_id: state.lastIds[t] }).eq('topic_id', t);
-            setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
-          }
+        const m = JSON.parse(event.data);
+        state.lastIds[t] = m.id;
+        const parts = m.message.split(':');
+        const type = parts[0], sid = parts.slice(1).join(':');
+        if (!sid) return;
+        if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic: t, sid, status: 'SAFE', count: 0 };
+        const s = state.studentStates[`${t}:${sid}`];
+        if (type === 'ALERT') { s.status = 'ALERT'; s.count++; }
+        else if (type === 'FOCUS_LOST') s.status = 'FOCUS-LOST';
+        else if (['REGISTER','FOCUS_GAINED','DISMISS'].includes(type)) s.status = 'SAFE';
+        renderDashboard();
+        const { error } = await sb.from('exam_status').upsert(
+          [{ topic_id: t, sid, status: s.status, alert_count: s.count, last_seen: new Date().toISOString() }],
+          { onConflict: 'topic_id,sid' }
+        );
+        if (error) {
+          console.error('exam_status upsert error:', error);
+          setStatus('✗ 状態保存失敗: ' + error.message, 'var(--red)');
+        } else {
+          lastPollUpdate = Date.now();
+          await sb.from('sessions').update({ last_ntfy_id: m.id }).eq('topic_id', t);
+          setStatus('● ' + new Date().toLocaleTimeString() + ' ' + type + ':' + sid, 'var(--green)');
         }
-      } catch(e) {
-        console.error('pollAll error:', e);
-      }
-    }
-    renderDashboard();
+      } catch(e) { console.error('SSE message error:', e); }
+    });
+
+    es.onerror = () => {
+      es.close();
+      delete eventSources[t];
+      setTimeout(() => subscribeToTopic(t), 5000); // 5秒後に再接続
+    };
   }
 
   // --- ダッシュボード ---
