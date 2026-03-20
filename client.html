@@ -166,9 +166,24 @@
         }
     }
 
-    function checkConnection() {
-        if (!monitoringActive) return;
-        if (navigator.onLine && !isAlert) {
+    let isChecking = false;
+    async function checkConnection() {
+        if (!monitoringActive || isChecking) return;
+        isChecking = true;
+        let online = false;
+        try {
+            const ctrl = new AbortController();
+            setTimeout(() => ctrl.abort(), 3000);
+            // no-cors: OpaqueResponseでもFetchが成功すれば接続あり
+            await fetch('https://www.gstatic.com/generate_204', {
+                method: 'GET', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal
+            });
+            online = true;
+        } catch(e) {
+            online = false;
+        }
+        isChecking = false;
+        if (online && !isAlert) {
             isAlert = true;
             sendEvent('ALERT');
             updateUI('ALERT');
