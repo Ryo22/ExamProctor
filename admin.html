@@ -429,10 +429,9 @@
       state.roster = {}; state.memos = {};
       (studRes.data || []).forEach(s => {
         state.roster[s.sid] = { name: s.name, group: s.class_group, topic: s.topic_id || '' };
-        state.memos[s.sid] = s.memo || '';
       });
 
-      const statusSeverity = { 'OFFLINE': 0, 'SAFE': 1, 'ALERT': 2, 'FINISHED': 3 };
+      const statusSeverity = { 'OFFLINE': 0, 'LOGIN': 1, 'SAFE': 2, 'ALERT': 3, 'FINISHED': 4 };
       if (Date.now() - lastPollUpdate > 8000) state.studentStates = {};
       (statRes.data || []).forEach(s => {
         const key = `${s.topic_id}:${s.sid}`;
@@ -441,6 +440,8 @@
         const localSev = local ? (statusSeverity[local.status] ?? 0) : -1;
         if (dbSev >= localSev)
           state.studentStates[key] = { topic: s.topic_id, sid: s.sid, status: s.status, count: s.alert_count };
+        // メモはレコード (topic_id:sid) ごとに保持
+        state.memos[key] = s.memo || '';
       });
 
       renderAll();
@@ -724,13 +725,17 @@
           <button class="btn btn-ghost" onclick="dismissAlert('${r.t}','${r.sid}')">解除</button>
           <button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${r.sid}')">編集</button>
         </td>
-        <td><input type="text" class="memo-input" value="${(state.memos[r.sid]||'').replace(/"/g,'&quot;')}" onblur="updateMemo('${r.sid}', this.value)" placeholder="メモ..."/></td>
+        <td><input type="text" class="memo-input" value="${(state.memos[`${r.t}:${r.sid}`]||'').replace(/"/g,'&quot;')}" onblur="updateMemo('${r.t}','${r.sid}', this.value)" placeholder="メモ..."/></td>
       </tr>`).join('');
   }
 
-  async function updateMemo(sid, v) {
-    state.memos[sid] = v;
-    const { error } = await sb.from('students').update({ memo: v }).eq('sid', sid);
+  async function updateMemo(topic, sid, v) {
+    const key = `${topic}:${sid}`;
+    state.memos[key] = v;
+    const { error } = await sb.from('exam_status')
+      .update({ memo: v })
+      .eq('topic_id', topic)
+      .eq('sid', sid);
     if (error) setStatus('✗ メモ保存失敗: ' + error.message, 'var(--red)');
     else setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
   }
