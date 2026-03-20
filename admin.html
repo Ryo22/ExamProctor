@@ -162,22 +162,35 @@
   async function pushToCloud() {
     if (!sb) return;
     try {
-        await sb.from('settings').upsert({ key: 'admin_state', data: { topics: state.topics, roster: state.roster, memos: state.memos, studentStates: state.studentStates, lastIds: state.lastIds } });
+        const { error } = await sb.from('settings').upsert(
+            { key: 'admin_state', data: { topics: state.topics, roster: state.roster, memos: state.memos, studentStates: state.studentStates, lastIds: state.lastIds } },
+            { onConflict: 'key' }
+        );
+        if (error) throw error;
         document.getElementById('cloud-sync-status').textContent = '● 同期済み ' + new Date().toLocaleTimeString();
         document.getElementById('cloud-sync-status').style.color = 'var(--green)';
-    } catch(e) {}
+    } catch(e) {
+        document.getElementById('cloud-sync-status').textContent = '✗ 同期失敗: ' + (e.message || e);
+        document.getElementById('cloud-sync-status').style.color = 'var(--red)';
+        console.error('pushToCloud error:', e);
+    }
   }
   async function pullFromCloud() {
     if (!sb) return;
     try {
-        const { data } = await sb.from('settings').select('data').eq('key', 'admin_state');
+        const { data, error } = await sb.from('settings').select('data').eq('key', 'admin_state');
+        if (error) throw error;
         if (data && data[0]?.data) {
             const d = data[0].data;
             state.topics = d.topics || []; state.roster = d.roster || {}; state.memos = d.memos || {};
             state.studentStates = d.studentStates || {}; state.lastIds = d.lastIds || {};
             renderAll();
         }
-    } catch(e) {}
+    } catch(e) {
+        document.getElementById('cloud-sync-status').textContent = '✗ 読込失敗: ' + (e.message || e);
+        document.getElementById('cloud-sync-status').style.color = 'var(--red)';
+        console.error('pullFromCloud error:', e);
+    }
   }
   function handleLogin() { if(document.getElementById('login-email').value==='admin@example.com' && document.getElementById('login-pass').value==='password123') { sessionStorage.setItem('admin_logged_in','true'); showAdminApp(); } }
   async function showAdminApp() {
