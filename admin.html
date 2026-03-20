@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>接続監視システム | クラウド統合ダッシュボード</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -21,7 +20,7 @@
       --orange:  #f97316;
     }
     body { font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
-    
+
     #login-screen { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; align-items: center; justify-content: center; }
     .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2.5rem; width: 100%; max-width: 420px; text-align: center; }
     .login-input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 12px; border-radius: 10px; margin-bottom: 1rem; }
@@ -40,7 +39,7 @@
     .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
     .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; text-align: center; }
     .stat-val { font-size: 1.8rem; font-weight: 900; line-height: 1; }
-    
+
     .filter-scroll { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 1rem; padding-bottom: 10px; }
     .filter-chip { min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; text-align: center; font-size: 0.85rem; font-weight: bold; color: var(--muted); transition: 0.15s; user-select: none; }
     .filter-chip.active { border-color: var(--blue); background: rgba(59,130,246,0.1); color: var(--blue); }
@@ -57,7 +56,9 @@
     .btn-red { background: rgba(239,68,68,0.1); color: var(--red); }
     .btn-green { background: var(--green); color: black; }
     .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-size: 0.75rem; }
-    
+    .btn-detail { background: rgba(59,130,246,0.08); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); font-size: 0.75rem; }
+    .btn-detail:hover { background: rgba(59,130,246,0.18); }
+
     input, textarea, select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; font-family: inherit; }
     input:focus, select:focus { border-color: var(--blue); outline:none; }
     .memo-input { background: transparent; border: none; border-bottom: 1px solid transparent; font-size: 0.75rem; padding: 4px; border-radius: 0; }
@@ -68,6 +69,24 @@
     .pill.ALERT { background: rgba(239,68,68,0.1); color: var(--red); }
     .pill.OFFLINE { background: var(--border); color: var(--muted); }
     .pill.FINISHED { background: rgba(100,116,139,0.15); color: #94a3b8; }
+
+    /* ── チャート ── */
+    .chart-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chart-tab { padding: 5px 14px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); cursor: pointer; font-size: 0.75rem; font-weight: 700; transition: 0.15s; user-select: none; }
+    .chart-tab.active { border-color: var(--blue); background: rgba(59,130,246,0.12); color: var(--blue); }
+    #chart-empty { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; color: var(--muted); font-size: 0.85rem; }
+
+    /* ── 詳細モーダル ── */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2rem; max-width: 680px; width: 92%; max-height: 82vh; overflow-y: auto; position: relative; }
+    .modal-close-btn { position: absolute; top: 1rem; right: 1rem; background: transparent; border: 1px solid var(--border); color: var(--muted); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; }
+    .modal-close-btn:hover { border-color: var(--red); color: var(--red); }
+    .history-pill { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; }
+    .history-pill.ALERT  { background: rgba(239,68,68,0.15); color: var(--red); }
+    .history-pill.SAFE   { background: rgba(34,197,94,0.12); color: var(--green); }
+    .history-pill.OFFLINE { background: var(--border); color: var(--muted); }
+    .history-pill.FINISHED { background: rgba(100,116,139,0.15); color: #94a3b8; }
   </style>
 </head>
 <body>
@@ -105,9 +124,31 @@
       <div class="filter-scroll" id="group-filter-container"></div>
       <div class="filter-scroll" id="topic-filter-container"></div>
     </div>
+
+    <!-- アラート時系列グラフ -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+        <h2>📈 アラート時系列グラフ</h2>
+        <div class="chart-tabs" id="chart-tabs"></div>
+      </div>
+      <div style="height:220px; position:relative;">
+        <canvas id="alert-chart"></canvas>
+        <div id="chart-empty">アラートデータがありません</div>
+      </div>
+    </div>
+
+    <!-- 受験生一覧 -->
     <div class="card">
         <h2>受験生状況一覧</h2>
-        <div style="overflow-x:auto;"><table><thead><tr><th>クラス</th><th>学籍番号</th><th>氏名</th><th>試験</th><th>状態</th><th>回数</th><th>操作</th><th>メモ</th></tr></thead><tbody id="student-tbody"></tbody></table></div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr>
+              <th>クラス</th><th>学籍番号</th><th>氏名</th><th>試験</th>
+              <th>状態</th><th>回数</th><th>操作</th><th>メモ</th>
+            </tr></thead>
+            <tbody id="student-tbody"></tbody>
+          </table>
+        </div>
     </div>
   </div>
 
@@ -122,12 +163,10 @@
   <div id="page-roster" class="page">
     <div class="card">
       <h2 id="roster-form-title">名簿登録・一括管理</h2>
-      <!-- 共通エリア -->
       <div style="background:rgba(255,255,255,0.03); padding:1.2rem; border-radius:12px; margin-bottom:1.5rem; display:flex; gap:15px; align-items:flex-end;">
           <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">【共通】試験名：</label><input type="text" id="roster-topic-select" list="topic-datalist" placeholder="試験名を選択または新規入力"/><datalist id="topic-datalist"></datalist></div>
           <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">【共通】クラス：</label><input type="text" id="roster-group" placeholder="クラス名"/></div>
       </div>
-      <!-- 個別エリア -->
       <div style="display:flex; gap:10px; margin-bottom:1rem; align-items:flex-end;">
           <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">学籍番号：</label><input type="text" id="roster-sid" placeholder="例: 2024001"/></div>
           <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">氏名：</label><input type="text" id="roster-name" placeholder="氏名"/></div>
@@ -147,10 +186,18 @@
   </div>
 </main>
 
+<!-- 詳細モーダル -->
+<div id="detail-modal" class="modal-overlay" onclick="if(event.target===this)closeDetail()">
+  <div class="modal-box">
+    <button class="modal-close-btn" onclick="closeDetail()">✕</button>
+    <div id="detail-modal-content"></div>
+  </div>
+</div>
+
 <script>
   const SUPABASE_URL = 'https://dkjftwhvhsxgcqawemmi.supabase.co';
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRramZ0d2h2aHN4Z2NxYXdlbW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODk5MzUsImV4cCI6MjA4OTQ2NTkzNX0.s4lYa3NRpM3ADs5esfVa_fpaAkVj4NLk7MKzgkSKsFo';
-  let sb = null, POLL_INTERVAL = 3000;
+  let sb = null;
   let state = { topics: [], roster: {}, studentStates: {}, memos: {}, lastIds: {} };
 
   function setStatus(msg, color) {
@@ -164,7 +211,6 @@
     await pullFromCloud();
   }
 
-  // --- クラウド読み込み（3テーブルから再構築）---
   async function pullFromCloud() {
     if (!sb) return;
     try {
@@ -187,19 +233,15 @@
         state.memos[s.sid] = s.memo || '';
       });
 
-      // 直近8秒以内にpollUpdateがあった場合はローカル状態を優先してマージ
       const statusSeverity = { 'OFFLINE': 0, 'SAFE': 1, 'ALERT': 2, 'FINISHED': 3 };
-      if (Date.now() - lastPollUpdate > 8000) {
-        state.studentStates = {};
-      }
+      if (Date.now() - lastPollUpdate > 8000) state.studentStates = {};
       (statRes.data || []).forEach(s => {
         const key = `${s.topic_id}:${s.sid}`;
         const local = state.studentStates[key];
         const dbSev = statusSeverity[s.status] ?? 0;
         const localSev = local ? (statusSeverity[local.status] ?? 0) : -1;
-        if (dbSev >= localSev) {
+        if (dbSev >= localSev)
           state.studentStates[key] = { topic: s.topic_id, sid: s.sid, status: s.status, count: s.alert_count };
-        }
       });
 
       renderAll();
@@ -210,16 +252,23 @@
     }
   }
 
-  function handleLogin() { if(document.getElementById('login-email').value==='admin@example.com' && document.getElementById('login-pass').value==='password123') { sessionStorage.setItem('admin_logged_in','true'); showAdminApp(); } }
+  function handleLogin() {
+    if (document.getElementById('login-email').value === 'admin@example.com' &&
+        document.getElementById('login-pass').value === 'password123') {
+      sessionStorage.setItem('admin_logged_in', 'true');
+      showAdminApp();
+    }
+  }
   async function showAdminApp() {
-    document.getElementById('login-screen').style.display='none';
-    document.querySelector('.app-header').style.display='flex';
+    document.getElementById('login-screen').style.display = 'none';
+    document.querySelector('.app-header').style.display = 'flex';
     document.querySelector('.app-viewport').classList.add('visible');
     await initCloud();
     subscribeAll();
+    renderAlertChart(null);   // 初回グラフ描画
     setInterval(pullFromCloud, 30000);
   }
-  window.onload = () => { if(sessionStorage.getItem('admin_logged_in')==='true') showAdminApp(); };
+  window.onload = () => { if (sessionStorage.getItem('admin_logged_in') === 'true') showAdminApp(); };
 
   function switchTab(tabId) {
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
@@ -264,7 +313,7 @@
     renderAll(); setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
   }
 
-  // --- Supabase Realtime リアルタイム購読 ---
+  // --- Supabase Realtime ---
   let lastPollUpdate = 0;
   let realtimeChannel = null;
 
@@ -279,6 +328,7 @@
         lastPollUpdate = Date.now();
         renderDashboard();
         setStatus('● ' + new Date().toLocaleTimeString() + '  ' + r.status + ' / ' + r.sid, 'var(--green)');
+        scheduleChartRefresh();  // リアルタイム更新時にグラフも更新
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') setStatus('● リアルタイム接続完了', 'var(--green)');
@@ -291,29 +341,48 @@
   function renderDashboard() {
     const rosterIds = Object.keys(state.roster);
     const groups = [...new Set(rosterIds.map(i => state.roster[i].group))].sort((a,b) => a.localeCompare(b, 'ja'));
-    document.getElementById('group-filter-container').innerHTML = `<div class="filter-chip filter-all ${fG===null?'active':''}" onclick="fG=null;renderDashboard()">全体表示</div>` + groups.map(g => `<div class="filter-chip ${fG===g?'active':''}" onclick="fG='${g}';renderDashboard()">${g}</div>`).join('');
+    document.getElementById('group-filter-container').innerHTML =
+      `<div class="filter-chip filter-all ${fG===null?'active':''}" onclick="fG=null;renderDashboard()">全体表示</div>` +
+      groups.map(g => `<div class="filter-chip ${fG===g?'active':''}" onclick="fG='${g}';renderDashboard()">${g}</div>`).join('');
     const sortedTopics = [...state.topics].sort((a,b) => a.localeCompare(b, 'ja'));
-    document.getElementById('topic-filter-container').innerHTML = `<div class="filter-chip filter-all ${fT===null?'active':''}" onclick="fT=null;renderDashboard()">全体表示</div>` + sortedTopics.map(t => `<div class="filter-chip ${fT===t?'active':''}" onclick="fT='${t}';renderDashboard()">${t}</div>`).join('');
+    document.getElementById('topic-filter-container').innerHTML =
+      `<div class="filter-chip filter-all ${fT===null?'active':''}" onclick="fT=null;renderDashboard()">全体表示</div>` +
+      sortedTopics.map(t => `<div class="filter-chip ${fT===t?'active':''}" onclick="fT='${t}';renderDashboard()">${t}</div>`).join('');
 
     const allKeys = new Set(Object.keys(state.studentStates));
     state.topics.forEach(t => rosterIds.forEach(id => { if (state.roster[id].topic === t) allKeys.add(`${t}:${id}`); }));
     let rows = [], uk = 0;
     allKeys.forEach(key => {
-      const [t, sid] = key.split(':'), r = state.roster[sid], s = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', count:0 };
-      if (fT!==null && t!==fT) return; if (fG!==null && (!r || r.group!==fG)) return;
+      const [t, sid] = key.split(':'), r = state.roster[sid];
+      const s = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', count:0 };
+      if (fT!==null && t!==fT) return;
+      if (fG!==null && (!r || r.group!==fG)) return;
       if (!r && s.status!=='OFFLINE') uk++;
       rows.push({ t, sid, name: r?r.name:'⚠️ 名簿未登録', group: r?r.group:'---', status: s.status, count: s.count, isUk: !r });
     });
-    document.getElementById('stat-unknown').textContent = uk; document.getElementById('stat-total').textContent = rows.length;
+    document.getElementById('stat-unknown').textContent = uk;
+    document.getElementById('stat-total').textContent = rows.length;
     document.getElementById('stat-alert').textContent = rows.filter(r=>r.status==='ALERT').length;
 
-    document.getElementById('student-tbody').innerHTML = rows.sort((a,b)=>a.sid.localeCompare(b.sid)).map(r => `
+    document.getElementById('student-tbody').innerHTML = rows
+      .sort((a,b) => a.sid.localeCompare(b.sid))
+      .map(r => `
       <tr class="${r.status==='ALERT'?'alert-row':''} ${r.isUk?'unknown-row':''}">
-        <td><small>${r.group}</small></td><td><b>${r.sid}</b></td><td>${r.name}</td><td>${r.t}</td>
-        <td><span class="pill ${r.status}">${r.status}</span></td><td>${r.count}</td>
-        <td style="display:flex; gap:5px;"><button class="btn btn-ghost" onclick="dismissAlert('${r.t}','${r.sid}')">解除</button><button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${r.sid}')">編集</button></td>
+        <td><small>${r.group}</small></td>
+        <td><b>${r.sid}</b></td>
+        <td>${r.name}</td>
+        <td>${r.t}</td>
+        <td><span class="pill ${r.status}">${r.status}</span></td>
+        <td>${r.count}</td>
+        <td style="display:flex; gap:5px; flex-wrap:wrap;">
+          <button class="btn btn-detail" onclick="showDetail('${r.t}','${r.sid}')">詳細を見る</button>
+          <button class="btn btn-ghost" onclick="dismissAlert('${r.t}','${r.sid}')">解除</button>
+          <button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${r.sid}')">編集</button>
+        </td>
         <td><input type="text" class="memo-input" value="${(state.memos[r.sid]||'').replace(/"/g,'&quot;')}" onblur="updateMemo('${r.sid}', this.value)" placeholder="メモ..."/></td>
       </tr>`).join('');
+
+    buildChartTabs();  // グループが変わったときにタブも更新
   }
 
   async function updateMemo(sid, v) {
@@ -391,7 +460,9 @@
   function renderRosterMaster() {
     const entries = Object.entries(state.roster).sort((a,b)=>a[1].group.localeCompare(b[1].group) || a[0].localeCompare(b[0]));
     const ukSids = [...new Set(Object.keys(state.studentStates).map(k=>k.split(':')[1]).filter(sid => !state.roster[sid]))].sort();
-    document.getElementById('roster-tbody-master').innerHTML = entries.map(([sid, info]) => `<tr><td>${info.topic||'---'}</td><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td><td><button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${sid}')">編集</button> <button class="btn btn-red" onclick="deleteRoster('${sid}')">削除</button></td></tr>`).join('') + ukSids.map(sid => `<tr class="unknown-row"><td>---</td><td>---</td><td><b>${sid}</b></td><td>⚠️ 未登録</td><td><button class="btn btn-blue" onclick="editRoster('${sid}')">登録</button></td></tr>`).join('');
+    document.getElementById('roster-tbody-master').innerHTML =
+      entries.map(([sid, info]) => `<tr><td>${info.topic||'---'}</td><td>${info.group}</td><td><b>${sid}</b></td><td>${info.name}</td><td><button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${sid}')">編集</button> <button class="btn btn-red" onclick="deleteRoster('${sid}')">削除</button></td></tr>`).join('') +
+      ukSids.map(sid => `<tr class="unknown-row"><td>---</td><td>---</td><td><b>${sid}</b></td><td>⚠️ 未登録</td><td><button class="btn btn-blue" onclick="editRoster('${sid}')">登録</button></td></tr>`).join('');
   }
 
   async function deleteRoster(sid) {
@@ -404,6 +475,192 @@
   }
 
   function syncNow() { pullFromCloud(); }
+
+  // ─────────────────────────────────────────────
+  // アラート時系列グラフ
+  // ─────────────────────────────────────────────
+  const CHART_PALETTE = ['#3b82f6','#ef4444','#22c55e','#f97316','#a855f7','#06b6d4','#eab308','#ec4899'];
+  let alertChart = null;
+  let currentChartGroup = null;
+  let chartRefreshTimer = null;
+
+  function scheduleChartRefresh() {
+    clearTimeout(chartRefreshTimer);
+    chartRefreshTimer = setTimeout(() => renderAlertChart(currentChartGroup), 2000);
+  }
+
+  function buildChartTabs() {
+    const groups = [...new Set(Object.values(state.roster).map(r => r.group).filter(Boolean))]
+      .sort((a,b) => a.localeCompare(b, 'ja'));
+    document.getElementById('chart-tabs').innerHTML =
+      `<div class="chart-tab ${currentChartGroup===null?'active':''}" onclick="renderAlertChart(null)">全体</div>` +
+      groups.map(g => `<div class="chart-tab ${currentChartGroup===g?'active':''}" onclick="renderAlertChart('${g}')">${g}</div>`).join('');
+  }
+
+  async function renderAlertChart(groupFilter) {
+    if (!sb) return;
+    currentChartGroup = groupFilter;
+    buildChartTabs();
+
+    const { data, error } = await sb
+      .from('exam_status_history')
+      .select('topic_id,sid,alert_count,recorded_at')
+      .eq('status', 'ALERT')
+      .order('recorded_at', { ascending: true });
+
+    if (error) {
+      console.warn('グラフ: exam_status_history が見つかりません。SQLを実行してください。', error.message);
+      return;
+    }
+
+    const allEvents = data || [];
+    const filtered = groupFilter
+      ? allEvents.filter(h => state.roster[h.sid]?.group === groupFilter)
+      : allEvents;
+
+    const emptyEl = document.getElementById('chart-empty');
+    if (filtered.length === 0) {
+      if (alertChart) { alertChart.destroy(); alertChart = null; }
+      emptyEl.style.display = 'flex';
+      return;
+    }
+    emptyEl.style.display = 'none';
+
+    // 全体表示: クラス別に色分け / 個別タブ: セッション別に色分け
+    const seriesKey = !groupFilter
+      ? (h => state.roster[h.sid]?.group || '---')
+      : (h => h.topic_id);
+
+    const seriesNames = [...new Set(filtered.map(seriesKey))].sort();
+
+    // 5分バケット
+    const BUCKET_MS = 5 * 60 * 1000;
+    const minT = new Date(filtered[0].recorded_at).getTime();
+    const maxT = new Date(filtered[filtered.length - 1].recorded_at).getTime();
+    const startBucket = Math.floor(minT / BUCKET_MS) * BUCKET_MS;
+    const endBucket   = Math.ceil((maxT + 1) / BUCKET_MS) * BUCKET_MS;
+    const buckets = [];
+    for (let t = startBucket; t <= endBucket; t += BUCKET_MS) buckets.push(t);
+
+    const labels = buckets.map(t => {
+      const d = new Date(t);
+      return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+    });
+
+    const datasets = seriesNames.map((name, i) => {
+      const events = filtered.filter(h => seriesKey(h) === name);
+      let cum = 0;
+      const cumData = buckets.map(bs => {
+        cum += events.filter(h => {
+          const t = new Date(h.recorded_at).getTime();
+          return t >= bs && t < bs + BUCKET_MS;
+        }).length;
+        return cum;
+      });
+      return {
+        label: name,
+        data: cumData,
+        borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
+        backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length] + '25',
+        fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 7,
+        borderWidth: 2
+      };
+    });
+
+    const ctx = document.getElementById('alert-chart').getContext('2d');
+    if (alertChart) alertChart.destroy();
+    alertChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { grid: { color: '#2a2d3a' }, ticks: { color: '#64748b', font: { size: 11 } } },
+          y: {
+            grid: { color: '#2a2d3a' },
+            ticks: { color: '#64748b', stepSize: 1, font: { size: 11 } },
+            beginAtZero: true,
+            title: { display: true, text: '累計アラート数', color: '#64748b', font: { size: 11 } }
+          }
+        },
+        plugins: {
+          legend: { labels: { color: '#e2e8f0', font: { size: 12 }, padding: 16 } },
+          tooltip: {
+            backgroundColor: '#1a1d27', borderColor: '#2a2d3a', borderWidth: 1,
+            titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10
+          }
+        }
+      }
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  // 詳細モーダル
+  // ─────────────────────────────────────────────
+  async function showDetail(topic, sid) {
+    const name  = state.roster[sid]?.name  || sid;
+    const group = state.roster[sid]?.group || '---';
+    const curSt = state.studentStates[`${topic}:${sid}`];
+    const curStatus = curSt ? curSt.status : 'OFFLINE';
+
+    document.getElementById('detail-modal-content').innerHTML = `
+      <h2 style="margin-bottom:0.4rem; padding-right:2rem;">${name}</h2>
+      <p style="color:var(--muted); font-size:0.8rem; margin-bottom:1.5rem;">
+        ${group} &nbsp;|&nbsp; 学籍番号: <b style="color:var(--text);">${sid}</b>
+        &nbsp;|&nbsp; 試験: <b style="color:var(--text);">${topic}</b>
+        &nbsp;|&nbsp; 現在: <span class="history-pill ${curStatus}">${curStatus}</span>
+      </p>
+      <p style="color:var(--muted); font-size:0.85rem;">読み込み中...</p>`;
+    document.getElementById('detail-modal').classList.add('show');
+
+    const { data, error } = await sb
+      .from('exam_status_history')
+      .select('*')
+      .eq('topic_id', topic)
+      .eq('sid', sid)
+      .order('recorded_at', { ascending: false });
+
+    if (error) {
+      document.getElementById('detail-modal-content').innerHTML += `
+        <p style="color:var(--red); margin-top:1rem;">履歴取得失敗: ${error.message}<br>
+        <small>Supabase で supabase_history.sql を実行してください。</small></p>`;
+      return;
+    }
+
+    const rows = (data || []).map(h => {
+      const dt = new Date(h.recorded_at);
+      const dateStr = dt.toLocaleDateString('ja-JP', { month:'2-digit', day:'2-digit' });
+      const timeStr = dt.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+      return `<tr>
+        <td style="white-space:nowrap; color:var(--muted); font-size:0.75rem;">${dateStr}</td>
+        <td style="white-space:nowrap;"><b>${timeStr}</b></td>
+        <td><span class="history-pill ${h.status}">${h.status}</span></td>
+        <td style="text-align:center;">${h.alert_count}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="4" style="text-align:center; color:var(--muted); padding:2rem;">履歴データがありません</td></tr>`;
+
+    document.getElementById('detail-modal-content').innerHTML = `
+      <h2 style="margin-bottom:0.4rem; padding-right:2rem;">${name}</h2>
+      <p style="color:var(--muted); font-size:0.8rem; margin-bottom:1.5rem;">
+        ${group} &nbsp;|&nbsp; 学籍番号: <b style="color:var(--text);">${sid}</b>
+        &nbsp;|&nbsp; 試験: <b style="color:var(--text);">${topic}</b>
+        &nbsp;|&nbsp; 現在: <span class="history-pill ${curStatus}">${curStatus}</span>
+      </p>
+      <table>
+        <thead><tr>
+          <th>日付</th><th>時刻</th><th>状態</th><th style="text-align:center;">累計アラート</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function closeDetail() {
+    document.getElementById('detail-modal').classList.remove('show');
+  }
+
+  // ESCキーでモーダルを閉じる
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
 </script>
 </body>
 </html>
