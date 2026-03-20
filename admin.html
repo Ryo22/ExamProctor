@@ -114,10 +114,27 @@
 
 <div id="login-screen">
   <div class="login-card">
-    <h1 style="margin-bottom:1.5rem;">🛡️ クラウド管理者ログイン</h1>
-    <input type="email" id="login-email" class="login-input" placeholder="メールアドレス" value="admin@example.com" />
-    <input type="password" id="login-pass" class="login-input" placeholder="パスワード" value="password123" />
-    <button class="btn btn-blue" style="width:100%; padding:14px;" onclick="handleLogin()">ログイン</button>
+    <h1 style="margin-bottom:1.5rem;">🛡️ 管理者ログイン</h1>
+
+    <!-- 接続設定（初回のみ展開） -->
+    <details id="conn-details" style="margin-bottom:1.2rem; text-align:left;">
+      <summary style="cursor:pointer; font-size:0.8rem; color:var(--muted); padding:6px 0;">⚙️ 接続設定（初回のみ）</summary>
+      <div style="margin-top:0.8rem; display:flex; flex-direction:column; gap:0.5rem;">
+        <div>
+          <label style="font-size:0.68rem; color:var(--muted); display:block; margin-bottom:4px;">Supabase URL</label>
+          <input type="text" id="cfg-url" class="login-input" placeholder="https://xxxx.supabase.co" style="margin-bottom:0;"/>
+        </div>
+        <div>
+          <label style="font-size:0.68rem; color:var(--muted); display:block; margin-bottom:4px;">Anon Key</label>
+          <input type="text" id="cfg-key" class="login-input" placeholder="eyJ..." style="margin-bottom:0;"/>
+        </div>
+      </div>
+    </details>
+
+    <input type="email"    id="login-email" class="login-input" placeholder="メールアドレス" />
+    <input type="password" id="login-pass"  class="login-input" placeholder="パスワード" />
+    <button id="login-btn" class="btn btn-blue" style="width:100%; padding:14px;" onclick="handleLogin()">ログイン</button>
+    <p id="login-error" style="color:var(--red); font-size:0.75rem; margin-top:0.8rem; min-height:1.1rem;"></p>
   </div>
 </div>
 
@@ -131,7 +148,10 @@
             <div class="nav-tab" data-tab="page-cloud">設定</div>
         </div>
     </div>
-    <div id="cloud-sync-status" style="font-size:0.65rem; color:var(--muted); font-weight:bold;">● 同期中...</div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div id="cloud-sync-status" style="font-size:0.65rem; color:var(--muted); font-weight:bold;">● 同期中...</div>
+      <button class="btn btn-ghost" onclick="handleLogout()" style="font-size:0.72rem; padding:6px 12px;">ログアウト</button>
+    </div>
 </header>
 
 <main class="app-viewport">
@@ -256,9 +276,26 @@
 
   <div id="page-cloud" class="page">
     <div class="card">
-      <h2>🌩️ クラウド接続情報</h2>
-      <input type="text" id="sb-url" readonly style="margin-bottom:1rem;"/>
-      <button class="btn btn-ghost" onclick="syncNow()">手動同期</button>
+      <h2 style="margin-bottom:1.2rem;">🌩️ クラウド接続情報</h2>
+      <div style="display:flex; flex-direction:column; gap:0.8rem; margin-bottom:1.2rem;">
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:4px;">Supabase URL</label>
+          <input type="text" id="sb-url" readonly/>
+        </div>
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:4px;">Anon Key</label>
+          <input type="text" id="sb-key-disp" readonly/>
+        </div>
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:4px;">ログインユーザー</label>
+          <input type="text" id="sb-user-disp" readonly/>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-ghost" onclick="syncNow()">🔄 手動同期</button>
+        <button class="btn btn-ghost" onclick="openConnSettings()">⚙️ 接続設定を変更</button>
+        <button class="btn btn-red" onclick="handleLogout()" style="margin-left:auto;">ログアウト</button>
+      </div>
     </div>
 
     <div class="card">
@@ -334,8 +371,7 @@
 </div>
 
 <script>
-  const SUPABASE_URL = 'https://dkjftwhvhsxgcqawemmi.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRramZ0d2h2aHN4Z2NxYXdlbW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODk5MzUsImV4cCI6MjA4OTQ2NTkzNX0.s4lYa3NRpM3ADs5esfVa_fpaAkVj4NLk7MKzgkSKsFo';
+  // 接続情報はlocalStorageで管理（ソースにハードコードしない）
   let sb = null;
   let state = { topics: [], roster: {}, studentStates: {}, memos: {}, lastIds: {} };
 
@@ -345,8 +381,10 @@
   }
 
   async function initCloud() {
-    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    document.getElementById('sb-url').value = SUPABASE_URL;
+    const url = localStorage.getItem('sb_url') || '';
+    const key = localStorage.getItem('sb_key') || '';
+    document.getElementById('sb-url').value = url;
+    document.getElementById('sb-key-disp').value = key ? key.slice(0, 24) + '…' + key.slice(-8) : '';
     await pullFromCloud();
   }
 
@@ -391,24 +429,84 @@
     }
   }
 
-  function handleLogin() {
-    if (document.getElementById('login-email').value === 'admin@example.com' &&
-        document.getElementById('login-pass').value === 'password123') {
-      sessionStorage.setItem('admin_logged_in', 'true');
-      showAdminApp();
+  async function handleLogin() {
+    const url   = document.getElementById('cfg-url').value.trim();
+    const key   = document.getElementById('cfg-key').value.trim();
+    const email = document.getElementById('login-email').value.trim();
+    const pass  = document.getElementById('login-pass').value;
+    const errEl = document.getElementById('login-error');
+    const btn   = document.getElementById('login-btn');
+    errEl.textContent = '';
+
+    if (!url || !key) {
+      errEl.textContent = '接続設定を入力してください';
+      document.getElementById('conn-details').open = true; return;
+    }
+    if (!email || !pass) { errEl.textContent = 'メールアドレスとパスワードを入力してください'; return; }
+
+    btn.textContent = 'ログイン中...'; btn.disabled = true;
+    try {
+      sb = supabase.createClient(url, key);
+      const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+      if (error) { errEl.textContent = 'ログイン失敗: ' + error.message; return; }
+      localStorage.setItem('sb_url', url);
+      localStorage.setItem('sb_key', key);
+      showAdminApp(data.user);
+    } finally {
+      btn.textContent = 'ログイン'; btn.disabled = false;
     }
   }
-  async function showAdminApp() {
+
+  async function showAdminApp(user) {
+    // ログインユーザー表示
+    if (user?.email) {
+      const el = document.getElementById('sb-user-disp');
+      if (el) el.value = user.email;
+    }
     document.getElementById('login-screen').style.display = 'none';
     document.querySelector('.app-header').style.display = 'flex';
     document.querySelector('.app-viewport').classList.add('visible');
     await initCloud();
     subscribeAll();
-    renderAlertChart(null);   // 初回グラフ描画
-    clearGrid();              // 名簿グリッド初期化
+    renderAlertChart(null);
+    clearGrid();
     setInterval(pullFromCloud, 30000);
   }
-  window.onload = () => { if (sessionStorage.getItem('admin_logged_in') === 'true') showAdminApp(); };
+
+  async function handleLogout() {
+    if (!confirm('ログアウトしますか？')) return;
+    await sb?.auth.signOut();
+    location.reload();
+  }
+
+  function openConnSettings() {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.querySelector('.app-header').style.display = 'none';
+    document.querySelector('.app-viewport').classList.remove('visible');
+    const url = localStorage.getItem('sb_url') || '';
+    const key = localStorage.getItem('sb_key') || '';
+    document.getElementById('cfg-url').value = url;
+    document.getElementById('cfg-key').value = key;
+    document.getElementById('conn-details').open = true;
+  }
+
+  // Enterキーでログイン
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') handleLogin();
+  });
+
+  window.onload = async () => {
+    const url = localStorage.getItem('sb_url') || '';
+    const key = localStorage.getItem('sb_key') || '';
+    document.getElementById('cfg-url').value = url;
+    document.getElementById('cfg-key').value = key;
+    if (!url || !key) { document.getElementById('conn-details').open = true; return; }
+    // 保存済み接続情報でセッション復元を試みる
+    sb = supabase.createClient(url, key);
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) showAdminApp(session.user);
+    else document.getElementById('conn-details').open = false; // 接続情報はあるが未ログイン
+  };
 
   function switchTab(tabId) {
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
