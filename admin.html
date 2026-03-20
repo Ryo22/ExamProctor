@@ -182,7 +182,57 @@
   </div>
 
   <div id="page-cloud" class="page">
-      <div class="card"><h2>🌩️ クラウド接続情報</h2><input type="text" id="sb-url" readonly style="margin-bottom:1rem;"/><button class="btn btn-ghost" onclick="syncNow()">手動同期</button></div>
+    <div class="card">
+      <h2>🌩️ クラウド接続情報</h2>
+      <input type="text" id="sb-url" readonly style="margin-bottom:1rem;"/>
+      <button class="btn btn-ghost" onclick="syncNow()">手動同期</button>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom:1.5rem;">🗑️ データ一括削除</h2>
+
+      <!-- フィルター -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:6px;">セッション</label>
+          <select id="del-topic" onchange="resetDeletePreview()"><option value="">全セッション</option></select>
+        </div>
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:6px;">クラス</label>
+          <select id="del-group" onchange="resetDeletePreview()"><option value="">全クラス</option></select>
+        </div>
+      </div>
+
+      <!-- 削除対象チェックボックス -->
+      <div style="margin-bottom:1.5rem;">
+        <p style="font-size:0.75rem; color:var(--muted); margin-bottom:0.8rem; font-weight:bold;">削除するデータ：</p>
+        <div style="display:flex; flex-direction:column; gap:0.7rem;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
+            <input type="checkbox" id="del-status" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
+            <span>受験ステータス <small style="color:var(--muted);">（現在の状態 / exam_status）</small></span>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
+            <input type="checkbox" id="del-history" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
+            <span>状態履歴 <small style="color:var(--muted);">（時系列ログ / exam_status_history）</small></span>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
+            <input type="checkbox" id="del-roster" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
+            <span>名簿データ <small style="color:var(--muted);">（受験生登録情報 / students）</small></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- プレビュー & 実行 -->
+      <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+        <button class="btn btn-ghost" onclick="previewDelete()">🔍 対象件数を確認</button>
+        <span id="del-preview" style="font-size:0.85rem; color:var(--muted);"></span>
+      </div>
+      <button id="del-execute-btn" class="btn btn-red"
+        style="display:none; margin-top:1.2rem; width:100%; padding:14px; font-size:0.95rem;"
+        onclick="executeDelete()">
+        ⚠️ 上記のデータを削除する（取り消し不可）
+      </button>
+    </div>
   </div>
 </main>
 
@@ -276,7 +326,7 @@
   }
   document.querySelectorAll('.nav-tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
-  function renderAll() { renderDashboard(); renderSessionManager(); renderRosterMaster(); }
+  function renderAll() { renderDashboard(); renderSessionManager(); renderRosterMaster(); renderDataManagement(); }
 
   // --- 試験セッション ---
   async function addTopic() {
@@ -475,6 +525,163 @@
   }
 
   function syncNow() { pullFromCloud(); }
+
+  // ─────────────────────────────────────────────
+  // データ一括削除
+  // ─────────────────────────────────────────────
+  function renderDataManagement() {
+    const topicSel = document.getElementById('del-topic');
+    const groupSel = document.getElementById('del-group');
+    if (!topicSel || !groupSel) return;
+    const curT = topicSel.value, curG = groupSel.value;
+    topicSel.innerHTML = '<option value="">全セッション</option>' +
+      state.topics.sort().map(t => `<option value="${t}" ${curT===t?'selected':''}>${t}</option>`).join('');
+    const groups = [...new Set(Object.values(state.roster).map(r => r.group).filter(Boolean))]
+      .sort((a,b) => a.localeCompare(b,'ja'));
+    groupSel.innerHTML = '<option value="">全クラス</option>' +
+      groups.map(g => `<option value="${g}" ${curG===g?'selected':''}>${g}</option>`).join('');
+  }
+
+  function resetDeletePreview() {
+    document.getElementById('del-preview').textContent = '';
+    document.getElementById('del-execute-btn').style.display = 'none';
+  }
+
+  async function previewDelete() {
+    const topic = document.getElementById('del-topic').value || null;
+    const group = document.getElementById('del-group').value || null;
+    const delStatus  = document.getElementById('del-status').checked;
+    const delHistory = document.getElementById('del-history').checked;
+    const delRoster  = document.getElementById('del-roster').checked;
+
+    if (!delStatus && !delHistory && !delRoster) {
+      document.getElementById('del-preview').innerHTML = '<span style="color:var(--orange);">削除対象を1つ以上チェックしてください</span>';
+      return;
+    }
+
+    const previewEl = document.getElementById('del-preview');
+    previewEl.textContent = '確認中...';
+    document.getElementById('del-execute-btn').style.display = 'none';
+
+    // クラスフィルター用SIDリスト
+    let sids = null;
+    if (group) {
+      const { data } = await sb.from('students').select('sid').eq('class_group', group);
+      sids = (data || []).map(s => s.sid);
+    }
+
+    const parts = [], errors = [];
+    let total = 0;
+
+    const countQuery = async (table, extraFilters) => {
+      let q = sb.from(table).select('*', { count: 'exact', head: true });
+      if (topic) q = q.eq('topic_id', topic);
+      if (sids !== null) q = sids.length > 0 ? q.in('sid', sids) : q.eq('sid', '__nomatch__');
+      if (extraFilters) q = extraFilters(q);
+      const { count, error } = await q;
+      if (error) { errors.push(table + ': ' + error.message); return 0; }
+      return count || 0;
+    };
+
+    if (delStatus) {
+      const n = await countQuery('exam_status');
+      parts.push(`受験ステータス <b>${n}件</b>`); total += n;
+    }
+    if (delHistory) {
+      const n = await countQuery('exam_status_history');
+      parts.push(`状態履歴 <b>${n}件</b>`); total += n;
+    }
+    if (delRoster) {
+      const n = await countQuery('students', q => group ? q.eq('class_group', group) : q);
+      parts.push(`名簿 <b>${n}件</b>`); total += n;
+    }
+
+    if (errors.length > 0) {
+      previewEl.innerHTML = `<span style="color:var(--red);">エラー: ${errors.join(' / ')}</span>`;
+      return;
+    }
+
+    previewEl.innerHTML = parts.join('　／　') +
+      `　→　<span style="color:var(--red); font-weight:900;">計 ${total}件</span>`;
+    document.getElementById('del-execute-btn').style.display = total > 0 ? 'block' : 'none';
+  }
+
+  async function executeDelete() {
+    const topic = document.getElementById('del-topic').value || null;
+    const group  = document.getElementById('del-group').value || null;
+    const delStatus  = document.getElementById('del-status').checked;
+    const delHistory = document.getElementById('del-history').checked;
+    const delRoster  = document.getElementById('del-roster').checked;
+
+    const desc = [
+      topic ? `セッション: ${topic}` : '全セッション',
+      group  ? `クラス: ${group}`    : '全クラス'
+    ].join(' ／ ');
+    const targets = [delStatus&&'受験ステータス', delHistory&&'状態履歴', delRoster&&'名簿データ'].filter(Boolean).join('・');
+
+    if (!confirm(`【削除確認】\n\n対象: ${desc}\n削除: ${targets}\n\nこの操作は取り消せません。実行しますか？`)) return;
+
+    const btn = document.getElementById('del-execute-btn');
+    const previewEl = document.getElementById('del-preview');
+    btn.disabled = true; btn.textContent = '削除中...';
+
+    // クラスフィルター用SIDリスト
+    let sids = null;
+    if (group) {
+      const { data } = await sb.from('students').select('sid').eq('class_group', group);
+      sids = (data || []).map(s => s.sid);
+    }
+
+    // 汎用削除: exam_status / exam_status_history 用
+    const deleteStatusTable = async (table) => {
+      let q = sb.from(table).delete();
+      if (topic && sids !== null) {
+        if (sids.length === 0) return null; // 対象なし
+        q = q.eq('topic_id', topic).in('sid', sids);
+      } else if (topic) {
+        q = q.eq('topic_id', topic);
+      } else if (sids !== null) {
+        if (sids.length === 0) return null;
+        q = q.in('sid', sids);
+      } else {
+        q = q.neq('topic_id', ''); // 全削除用catch-all
+      }
+      return await q;
+    };
+
+    const errors = [];
+
+    if (delStatus) {
+      const res = await deleteStatusTable('exam_status');
+      if (res?.error) errors.push('受験ステータス: ' + res.error.message);
+    }
+    if (delHistory) {
+      const res = await deleteStatusTable('exam_status_history');
+      if (res?.error) errors.push('状態履歴: ' + res.error.message);
+    }
+    if (delRoster) {
+      let q = sb.from('students').delete();
+      if (topic) q = q.eq('topic_id', topic);
+      if (group)  q = q.eq('class_group', group);
+      if (!topic && !group) q = q.neq('sid', '');
+      const { error } = await q;
+      if (error) errors.push('名簿: ' + error.message);
+    }
+
+    btn.disabled = false;
+    btn.textContent = '⚠️ 上記のデータを削除する（取り消し不可）';
+
+    if (errors.length === 0) {
+      previewEl.innerHTML = '<span style="color:var(--green);">✓ 削除が完了しました</span>';
+      btn.style.display = 'none';
+      setStatus('● 削除完了 ' + new Date().toLocaleTimeString(), 'var(--green)');
+      await pullFromCloud();
+      renderAlertChart(currentChartGroup);
+    } else {
+      previewEl.innerHTML = `<span style="color:var(--red);">エラー: ${errors.join(' ／ ')}</span>`;
+      setStatus('✗ 削除エラー', 'var(--red)');
+    }
+  }
 
   // ─────────────────────────────────────────────
   // アラート時系列グラフ
