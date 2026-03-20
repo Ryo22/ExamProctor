@@ -108,6 +108,7 @@
     .history-pill.SAFE   { background: rgba(34,197,94,0.12); color: var(--green); }
     .history-pill.OFFLINE { background: var(--border); color: var(--muted); }
     .history-pill.FINISHED { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    tr.history-highlight { background: rgba(59,130,246,0.18) !important; outline: 1px solid var(--blue); }
   </style>
 </head>
 <body>
@@ -299,6 +300,22 @@
     </div>
 
     <div class="card">
+      <h2 style="margin-bottom:1.2rem;">🔑 パスワード変更</h2>
+      <div style="display:flex; flex-direction:column; gap:0.8rem; max-width:360px;">
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:4px;">新しいパスワード</label>
+          <input type="password" id="new-pass" placeholder="8文字以上" autocomplete="new-password"/>
+        </div>
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:4px;">新しいパスワード（確認）</label>
+          <input type="password" id="new-pass-confirm" placeholder="もう一度入力" autocomplete="new-password"/>
+        </div>
+        <p id="pw-change-msg" style="font-size:0.8rem; min-height:1.2rem;"></p>
+        <button class="btn btn-blue" onclick="changePassword()" style="align-self:flex-start; padding:10px 24px;">変更する</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2 style="margin-bottom:1.5rem;">🗑️ データ一括削除</h2>
 
       <!-- フィルター -->
@@ -477,6 +494,27 @@
     if (!confirm('ログアウトしますか？')) return;
     await sb?.auth.signOut();
     location.reload();
+  }
+
+  async function changePassword() {
+    const newPass    = document.getElementById('new-pass').value;
+    const newConfirm = document.getElementById('new-pass-confirm').value;
+    const msgEl      = document.getElementById('pw-change-msg');
+    msgEl.style.color = 'var(--red)';
+    if (!newPass) { msgEl.textContent = 'パスワードを入力してください'; return; }
+    if (newPass.length < 8) { msgEl.textContent = '8文字以上で入力してください'; return; }
+    if (newPass !== newConfirm) { msgEl.textContent = 'パスワードが一致しません'; return; }
+    msgEl.textContent = '変更中...'; msgEl.style.color = 'var(--muted)';
+    const { error } = await sb.auth.updateUser({ password: newPass });
+    if (error) {
+      msgEl.style.color = 'var(--red)';
+      msgEl.textContent = '変更失敗: ' + error.message;
+    } else {
+      msgEl.style.color = 'var(--green)';
+      msgEl.textContent = '✓ パスワードを変更しました';
+      document.getElementById('new-pass').value = '';
+      document.getElementById('new-pass-confirm').value = '';
+    }
   }
 
   function openConnSettings() {
@@ -1178,9 +1216,10 @@
     currentChartGroup = groupFilter;
     buildChartTabs();
 
+    // ALERTイベントのみ取得
     const { data, error } = await sb
       .from('exam_status_history')
-      .select('topic_id,sid,alert_count,recorded_at')
+      .select('topic_id,sid,status,recorded_at')
       .eq('status', 'ALERT')
       .is('deleted_at', null)
       .order('recorded_at', { ascending: true });
@@ -1196,51 +1235,92 @@
       : allEvents;
 
     const emptyEl = document.getElementById('chart-empty');
-    if (filtered.length === 0) {
+    if (!filtered.length) {
       if (alertChart) { alertChart.destroy(); alertChart = null; }
       emptyEl.style.display = 'flex';
       return;
     }
     emptyEl.style.display = 'none';
 
-    // 全体表示: クラス別に色分け / 個別タブ: セッション別に色分け
+    // 全体: グループ別 / 個別タブ: セッション別
     const seriesKey = !groupFilter
       ? (h => state.roster[h.sid]?.group || '---')
       : (h => h.topic_id);
 
     const seriesNames = [...new Set(filtered.map(seriesKey))].sort();
 
-    // 5分バケット
-    const BUCKET_MS = 5 * 60 * 1000;
-    const minT = new Date(filtered[0].recorded_at).getTime();
-    const maxT = new Date(filtered[filtered.length - 1].recorded_at).getTime();
-    const startBucket = Math.floor(minT / BUCKET_MS) * BUCKET_MS;
-    const endBucket   = Math.ceil((maxT + 1) / BUCKET_MS) * BUCKET_MS;
-    const buckets = [];
-    for (let t = startBucket; t <= endBucket; t += BUCKET_MS) buckets.push(t);
+    // ── 色の固定割り当て（タブをまたいでも同色） ──
+    // 全グループをアルファベット順でソートしてパレットのインデックスを固定
+    const allGroupsSorted = [...new Set(
+      Object.values(state.roster).map(r => r.group).filter(Boolean)
+    )].sort((a,b) => a.localeCompare(b, 'ja'));
 
-    const labels = buckets.map(t => {
-      const d = new Date(t);
-      return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
-    });
+    const colorForSeries = name => {
+      if (!groupFilter) {
+        // 全体タブ: グループ名でインデックス固定
+        const idx = allGroupsSorted.indexOf(name);
+        return CHART_PALETTE[(idx >= 0 ? idx : 0) % CHART_PALETTE.length];
+      } else {
+        // 個別タブ: そのグループの色をベースに使う（タブと全体で色が一致）
+        const groupIdx = allGroupsSorted.indexOf(groupFilter);
+        return CHART_PALETTE[(groupIdx >= 0 ? groupIdx : 0) % CHART_PALETTE.length];
+      }
+    };
 
-    const datasets = seriesNames.map((name, i) => {
+    const fmt2 = n => String(n).padStart(2, '0');
+    const fmtTime = ms => {
+      const d = new Date(ms);
+      return `${fmt2(d.getHours())}:${fmt2(d.getMinutes())}:${fmt2(d.getSeconds())}`;
+    };
+
+    // ── スパイク型グラフ: ALERTの瞬間だけY=1に跳ね上がり、前後はY=0 ──
+    // 全アラート時刻を使ってスパイク幅を動的に計算
+    const allTs = filtered.map(h => new Date(h.recorded_at).getTime());
+    const globalMin = Math.min(...allTs);
+    const globalMax = Math.max(...allTs);
+    const timeRange = Math.max(globalMax - globalMin, 60000);
+    // 隣接イベント間の最小間隔の40%をスパイク半幅とする（視認できる幅を確保）
+    const sortedTs = [...new Set(allTs)].sort((a,b) => a-b);
+    let minGap = timeRange;
+    for (let i = 1; i < sortedTs.length; i++) minGap = Math.min(minGap, sortedTs[i] - sortedTs[i-1]);
+    const SPIKE_HALF = Math.min(minGap * 0.4, timeRange * 0.02);
+
+    const datasets = seriesNames.map(name => {
       const events = filtered.filter(h => seriesKey(h) === name);
-      let cum = 0;
-      const cumData = buckets.map(bs => {
-        cum += events.filter(h => {
-          const t = new Date(h.recorded_at).getTime();
-          return t >= bs && t < bs + BUCKET_MS;
-        }).length;
-        return cum;
+      const color   = colorForSeries(name);
+
+      // 開始ベースライン
+      const points = [{ x: globalMin - SPIKE_HALF * 3, y: 0, synthetic: true }];
+
+      events.forEach(h => {
+        const ts = new Date(h.recorded_at).getTime();
+        points.push({ x: ts - SPIKE_HALF, y: 0, synthetic: true });   // 直前ゼロ
+        points.push({                                                    // ピーク
+          x: ts, y: 1, synthetic: false,
+          meta: { sid: h.sid, topic: h.topic_id, recorded_at: h.recorded_at,
+                  name: state.roster[h.sid]?.name || h.sid }
+        });
+        points.push({ x: ts + SPIKE_HALF, y: 0, synthetic: true });   // 直後ゼロ
       });
+
+      // 終端ベースライン
+      points.push({ x: Date.now(), y: 0, synthetic: true });
+
       return {
         label: name,
-        data: cumData,
-        borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
-        backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length] + '25',
-        fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 7,
-        borderWidth: 2
+        data: points,
+        parsing: false,
+        stepped: false,
+        tension: 0,
+        borderColor: color,
+        backgroundColor: color + '30',
+        fill: true,
+        borderWidth: 2,
+        pointRadius:      ctx => ctx.dataset.data[ctx.dataIndex]?.synthetic ? 0 : 7,
+        pointHoverRadius: ctx => ctx.dataset.data[ctx.dataIndex]?.synthetic ? 0 : 10,
+        pointBackgroundColor: color,
+        pointBorderColor: '#fff',
+        pointBorderWidth: 1.5,
       };
     });
 
@@ -1248,34 +1328,65 @@
     if (alertChart) alertChart.destroy();
     alertChart = new Chart(ctx, {
       type: 'line',
-      data: { labels, datasets },
+      data: { datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
+        interaction: { mode: 'nearest', intersect: true },
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const el = elements[0];
+          const pt = datasets[el.datasetIndex].data[el.index];
+          if (pt.synthetic || !pt.meta) return;
+          highlightDetail(pt.meta.topic, pt.meta.sid, pt.meta.recorded_at);
+        },
+        onHover: (evt, elements) => {
+          const canvas = evt.native?.target;
+          if (!canvas) return;
+          const clickable = elements.some(el => !datasets[el.datasetIndex]?.data[el.index]?.synthetic);
+          canvas.style.cursor = clickable ? 'pointer' : 'default';
+        },
         scales: {
-          x: { grid: { color: '#2a2d3a' }, ticks: { color: '#64748b', font: { size: 11 } } },
+          x: {
+            type: 'linear',
+            grid: { color: '#2a2d3a' },
+            ticks: { color: '#64748b', font: { size: 11 }, maxTicksLimit: 10, callback: val => fmtTime(val) }
+          },
           y: {
             grid: { color: '#2a2d3a' },
-            ticks: { color: '#64748b', stepSize: 1, font: { size: 11 } },
-            beginAtZero: true,
-            title: { display: true, text: '累計アラート数', color: '#64748b', font: { size: 11 } }
+            ticks: { color: '#64748b', font: { size: 11 },
+              callback: v => v === 0 ? '0' : v === 1 ? 'ALERT' : '' },
+            beginAtZero: true, max: 1.6,
+            title: { display: true, text: 'アラート発生', color: '#64748b', font: { size: 11 } }
           }
         },
         plugins: {
           legend: { labels: { color: '#e2e8f0', font: { size: 12 }, padding: 16 } },
           tooltip: {
             backgroundColor: '#1a1d27', borderColor: '#2a2d3a', borderWidth: 1,
-            titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10
+            titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10,
+            filter: item => !datasets[item.datasetIndex]?.data[item.dataIndex]?.synthetic,
+            callbacks: {
+              title: items => fmtTime(items[0].parsed.x),
+              label: item => {
+                const pt = datasets[item.datasetIndex].data[item.dataIndex];
+                return ` ${item.dataset.label}：${pt?.meta?.name || ''}`;
+              }
+            }
           }
         }
       }
     });
   }
 
+  // グラフ点クリック: 詳細モーダルを開き該当レコードをハイライト
+  async function highlightDetail(topic, sid, recorded_at) {
+    await showDetail(topic, sid, recorded_at);
+  }
+
   // ─────────────────────────────────────────────
   // 詳細モーダル
   // ─────────────────────────────────────────────
-  async function showDetail(topic, sid) {
+  async function showDetail(topic, sid, highlightAt = null) {
     const name  = state.roster[sid]?.name  || sid;
     const group = state.roster[sid]?.group || '---';
     const curSt = state.studentStates[`${topic}:${sid}`];
@@ -1310,7 +1421,7 @@
       const dt = new Date(h.recorded_at);
       const dateStr = dt.toLocaleDateString('ja-JP', { month:'2-digit', day:'2-digit' });
       const timeStr = dt.toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-      return `<tr>
+      return `<tr data-ts="${h.recorded_at}">
         <td style="white-space:nowrap; color:var(--muted); font-size:0.75rem;">${dateStr}</td>
         <td style="white-space:nowrap;"><b>${timeStr}</b></td>
         <td><span class="history-pill ${h.status}">${h.status}</span></td>
@@ -1318,19 +1429,40 @@
       </tr>`;
     }).join('') || `<tr><td colspan="4" style="text-align:center; color:var(--muted); padding:2rem;">履歴データがありません</td></tr>`;
 
+    const highlightNote = highlightAt
+      ? `<p style="font-size:0.75rem; color:var(--blue); margin-bottom:0.6rem;">📍 グラフでクリックした時点のレコードをハイライト表示しています</p>`
+      : '';
+
     document.getElementById('detail-modal-content').innerHTML = `
       <h2 style="margin-bottom:0.4rem; padding-right:2rem;">${name}</h2>
-      <p style="color:var(--muted); font-size:0.8rem; margin-bottom:1.5rem;">
+      <p style="color:var(--muted); font-size:0.8rem; margin-bottom:0.8rem;">
         ${group} &nbsp;|&nbsp; 学籍番号: <b style="color:var(--text);">${sid}</b>
         &nbsp;|&nbsp; 試験: <b style="color:var(--text);">${topic}</b>
         &nbsp;|&nbsp; 現在: <span class="history-pill ${curStatus}">${curStatus}</span>
       </p>
+      ${highlightNote}
       <table>
         <thead><tr>
           <th>日付</th><th>時刻</th><th>状態</th><th style="text-align:center;">累計アラート</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
+
+    // 該当レコードをハイライト＆スクロール
+    if (highlightAt) {
+      const targetTs = new Date(highlightAt).toISOString();
+      // recorded_at は秒精度で一致するものを探す（ミリ秒差を吸収）
+      const allRows = document.querySelectorAll('#detail-modal-content tbody tr[data-ts]');
+      let best = null, bestDiff = Infinity;
+      allRows.forEach(tr => {
+        const diff = Math.abs(new Date(tr.dataset.ts) - new Date(highlightAt));
+        if (diff < bestDiff) { bestDiff = diff; best = tr; }
+      });
+      if (best && bestDiff < 2000) {
+        best.classList.add('history-highlight');
+        setTimeout(() => best.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+      }
+    }
   }
 
   function closeDetail() {
