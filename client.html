@@ -72,6 +72,7 @@
         <div id="state-label">監視中</div>
         <div id="state-desc">ネットワーク接続をチェックしています...</div>
         <button id="dismiss-btn" class="btn btn-red" style="display:none;" onclick="onDismiss()">了解しました（切断済み）</button>
+        <button id="end-btn" class="btn" style="background:var(--muted); margin-top:0.5rem;" onclick="onEnd()">試験を終了する</button>
     </div>
 </div>
 
@@ -103,6 +104,7 @@
         if (!TOPIC || !SID) return;
         if (type === 'ALERT') { currentStatus = 'ALERT'; alertCount++; }
         else if (type === 'FOCUS_LOST') currentStatus = 'FOCUS-LOST';
+        else if (type === 'END') currentStatus = 'FINISHED';
         else if (['REGISTER', 'FOCUS_GAINED', 'DISMISS'].includes(type)) currentStatus = 'SAFE';
         // fire-and-forget: awaitしないことで遅延ゼロ
         sb.from('exam_status').upsert({
@@ -154,6 +156,14 @@
             label.style.color = 'var(--red)';
             desc.textContent = '直ちに Wi-Fi をオフにするか、LANケーブルを抜いてください！';
             btn.style.display = 'block';
+        } else if (status === 'ENDED') {
+            card.className = 'card';
+            icon.textContent = '✅';
+            label.textContent = '試験終了';
+            label.style.color = 'var(--muted)';
+            desc.textContent = 'お疲れ様でした。このページを閉じてください。';
+            btn.style.display = 'none';
+            document.getElementById('end-btn').style.display = 'none';
         }
     }
 
@@ -170,6 +180,13 @@
         isAlert = false;
         sendEvent('DISMISS');
         updateUI('MONITORING');
+    }
+
+    function onEnd() {
+        if (!confirm('試験を終了しますか？\n終了後は監視が停止されます。')) return;
+        monitoringActive = false;
+        sendEvent('END');
+        updateUI('ENDED');
     }
 
     window.onblur = () => { if(monitoringActive) sendEvent('FOCUS_LOST'); };
