@@ -16,6 +16,7 @@
       --red: #ef4444;
       --blue: #3b82f6;
       --green: #22c55e;
+      --orange: #f97316;
     }
     body {
       font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif;
@@ -23,7 +24,7 @@
       overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center;
     }
 
-    #viewport { text-align: center; max-width: 420px; width: 90%; }
+    #viewport { text-align: center; max-width: 440px; width: 90%; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 2.5rem; position: relative; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
 
     /* Entry Screen */
@@ -32,6 +33,23 @@
     .input-grp label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 8px; font-weight: bold; }
     input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px; color: white; font-size: 1rem; transition: 0.2s; }
     input:focus { border-color: var(--blue); outline: none; box-shadow: 0 0 10px rgba(59,130,246,0.2); }
+
+    /* Login Screen */
+    #login-screen h1 { font-size: 1.4rem; font-weight: 900; margin-bottom: 0.4rem; color: var(--blue); }
+    .login-meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 1.8rem; }
+    .login-meta b { color: var(--text); }
+    .offline-guide {
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 14px;
+      padding: 1.2rem 1.4rem;
+      text-align: left;
+      margin-bottom: 1.6rem;
+    }
+    .offline-guide h3 { font-size: 0.9rem; color: var(--red); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 6px; }
+    .offline-guide ul { list-style: none; padding: 0; }
+    .offline-guide li { font-size: 0.85rem; color: var(--text); padding: 4px 0; display: flex; align-items: center; gap: 8px; }
+    .offline-guide li::before { content: '→'; color: var(--red); font-weight: 900; }
 
     /* Status Screen */
     #state-icon { font-size: 3.5rem; margin-bottom: 1rem; }
@@ -44,7 +62,10 @@
 
     .btn { background: var(--blue); border: none; color: white; padding: 16px 24px; border-radius: 12px; font-weight: 900; cursor: pointer; margin-top: 1rem; width: 100%; transition: 0.22s; box-shadow: 0 4px 15px rgba(59,130,246,0.3); font-size: 1rem; }
     .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(59,130,246,0.5); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
     .btn-red { background: var(--red); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); }
+    .btn-start { background: var(--green); box-shadow: 0 4px 15px rgba(34,197,94,0.3); }
+    .btn-start:hover { box-shadow: 0 6px 20px rgba(34,197,94,0.5); }
 
     .meta-info { position: fixed; bottom: 20px; left: 0; right: 0; font-size: 0.7rem; color: var(--muted); opacity: 0.6; }
     .hidden { display: none; }
@@ -53,6 +74,7 @@
 <body>
 
 <div id="viewport">
+    <!-- ① 入力画面 -->
     <div id="entry-screen" class="card">
         <h1>🔍 受験登録</h1>
         <div class="input-grp">
@@ -63,10 +85,30 @@
             <label>学籍番号</label>
             <input type="text" id="input-sid" placeholder="学籍番号を入力してください">
         </div>
-        <button class="btn" onclick="startProctoring()">試験監視を開始する</button>
+        <button class="btn" id="login-btn" onclick="handleLogin()">システムにログインする</button>
         <p id="entry-error" style="color:var(--red); font-size:0.75rem; margin-top:1rem; min-height:1.2rem;"></p>
     </div>
 
+    <!-- ② ログイン後・監視開始前の案内画面 -->
+    <div id="login-screen" class="card hidden">
+        <h1>🔒 システムログイン済み</h1>
+        <p class="login-meta">
+            試験: <b id="login-topic-disp">---</b> &nbsp;|&nbsp; 学籍番号: <b id="login-sid-disp">---</b>
+        </p>
+
+        <div class="offline-guide">
+            <h3>⚠️ 監視開始前に必ずオフラインにしてください</h3>
+            <ul>
+                <li>Wi-Fi をオフにする</li>
+                <li>LAN ケーブルを抜く</li>
+                <li>機内モードを有効にする（スマートフォン等）</li>
+            </ul>
+        </div>
+
+        <button class="btn btn-start" onclick="startProctoring()">監視を開始する</button>
+    </div>
+
+    <!-- ③ 監視中画面 -->
     <div id="main-screen" class="card hidden">
         <div id="state-icon">🛡️</div>
         <div id="state-label">確認中...</div>
@@ -87,12 +129,12 @@
 
     let TOPIC = "", SID = "";
     let monitoringActive = false;
-    let isOnline = false;       // 前回tickで判定した接続状態
-    let isChecking = false;     // tick多重実行防止
-    let firstTick = true;       // 初回tick判定（最初の接続はRECONNECTとみなさない）
+    let isOnline = false;
+    let isChecking = false;
+    let firstTick = true;
     let currentStatus = 'OFFLINE';
     let alertCount = 0;
-    let lastSyncedStatus = null; // Supabaseへ送信成功した最後のステータス
+    let lastSyncedStatus = null;
 
     window.onload = function() {
         const params = new URLSearchParams(window.location.search);
@@ -102,7 +144,7 @@
         if (sidParam) document.getElementById('input-sid').value = sidParam;
     };
 
-    // Supabaseへステータスを送信（成否を返す）
+    // Supabaseへステータスを送信
     async function syncStatus(status, count) {
         try {
             const { error } = await sb.from('exam_status').upsert({
@@ -120,18 +162,50 @@
         }
     }
 
-    function startProctoring() {
-        TOPIC = document.getElementById('input-topic').value.trim();
-        SID = document.getElementById('input-sid').value.trim();
-        if (!TOPIC || !SID) {
-            document.getElementById('entry-error').textContent = 'セッション名と学籍番号を入力してください。';
+    // ① ログインボタン: 入力確認 → LOGIN ステータスを送信 → 案内画面へ
+    async function handleLogin() {
+        const topic = document.getElementById('input-topic').value.trim();
+        const sid   = document.getElementById('input-sid').value.trim();
+        const errEl = document.getElementById('entry-error');
+        const btn   = document.getElementById('login-btn');
+
+        errEl.textContent = '';
+        if (!topic || !sid) {
+            errEl.textContent = 'セッション名と学籍番号を入力してください。';
             return;
         }
+
+        TOPIC = topic;
+        SID   = sid;
+
+        btn.textContent = 'ログイン中...';
+        btn.disabled = true;
+
+        // LOGIN ステータスを Supabase へ送信
+        const ok = await syncStatus('LOGIN', 0);
+
+        btn.textContent = 'システムにログインする';
+        btn.disabled = false;
+
+        if (!ok) {
+            errEl.textContent = 'ネットワークエラー。接続を確認して再試行してください。';
+            return;
+        }
+
+        // 案内画面へ
+        document.getElementById('login-topic-disp').textContent = TOPIC;
+        document.getElementById('login-sid-disp').textContent   = SID;
         document.getElementById('entry-screen').classList.add('hidden');
-        document.getElementById('main-screen').classList.remove('hidden');
+        document.getElementById('login-screen').classList.remove('hidden');
         document.getElementById('meta-container').classList.remove('hidden');
         document.getElementById('meta-session').textContent = TOPIC;
-        document.getElementById('meta-sid').textContent = SID;
+        document.getElementById('meta-sid').textContent     = SID;
+    }
+
+    // ② 監視開始ボタン: 案内画面 → 監視画面
+    function startProctoring() {
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('main-screen').classList.remove('hidden');
         monitoringActive = true;
         updateUI('CHECKING');
         setInterval(tick, 1000);
@@ -140,11 +214,9 @@
     // メインループ: 接続確認 → 状態更新 → 同期
     async function tick() {
         if (isChecking) return;
-        // FINISHEDが送信完了したら終了
         if (!monitoringActive && lastSyncedStatus === 'FINISHED') return;
         isChecking = true;
 
-        // 1. 実際にHTTPリクエストを送って接続確認
         let online = false;
         try {
             const ctrl = new AbortController();
@@ -158,10 +230,8 @@
         const wasOnline = isOnline;
         isOnline = online;
 
-        // 2. 接続状態の変化に応じてステータスを決定（試験中のみ）
         if (monitoringActive && currentStatus !== 'FINISHED') {
             if (firstTick) {
-                // 初回: 現在の接続状態をそのまま反映
                 firstTick = false;
                 if (online) {
                     currentStatus = 'ALERT';
@@ -172,25 +242,21 @@
                     updateUI('SAFE');
                 }
             } else if (!wasOnline && online) {
-                // 再接続: まずSAFEを送信してオフライン期間を記録、その後ALERT
                 await syncStatus('SAFE');
                 await new Promise(r => setTimeout(r, 500));
                 currentStatus = 'ALERT';
                 alertCount++;
                 updateUI('ALERT');
             } else if (wasOnline && !online) {
-                // 切断: SAFEへ（送信はオンライン復帰まで保留）
                 currentStatus = 'SAFE';
                 updateUI('SAFE');
             } else if (online && currentStatus === 'SAFE') {
-                // オンラインなのにSAFE（DISMISS後など）→ 再ALERT
                 currentStatus = 'ALERT';
                 alertCount++;
                 updateUI('ALERT');
             }
         }
 
-        // 3. オンラインで未同期のステータスがあれば送信
         if (online && currentStatus !== lastSyncedStatus) {
             await syncStatus(currentStatus);
         }
@@ -199,11 +265,11 @@
     }
 
     function updateUI(status) {
-        const card = document.getElementById('main-screen');
-        const icon = document.getElementById('state-icon');
+        const card  = document.getElementById('main-screen');
+        const icon  = document.getElementById('state-icon');
         const label = document.getElementById('state-label');
-        const desc = document.getElementById('state-desc');
-        const btn = document.getElementById('dismiss-btn');
+        const desc  = document.getElementById('state-desc');
+        const btn   = document.getElementById('dismiss-btn');
 
         if (status === 'CHECKING') {
             card.className = 'card';
@@ -238,7 +304,6 @@
     }
 
     function onDismiss() {
-        // SAFEに戻す。次のtickで再接続中ならALERTに再移行する
         currentStatus = 'SAFE';
         updateUI('SAFE');
         if (isOnline) {
@@ -251,7 +316,6 @@
         monitoringActive = false;
         currentStatus = 'FINISHED';
         updateUI('ENDED');
-        // tick()がFINISHEDの送信完了まで継続して再送を試みる
     }
 </script>
 </body>

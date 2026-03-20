@@ -69,6 +69,7 @@
     .pill.ALERT { background: rgba(239,68,68,0.1); color: var(--red); }
     .pill.OFFLINE { background: var(--border); color: var(--muted); }
     .pill.FINISHED { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .pill.LOGIN { background: rgba(59,130,246,0.12); color: var(--blue); }
 
     /* Table sort & filter */
     th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
@@ -81,6 +82,7 @@
     .sts-filter.active[data-s="ALERT"]    { border-color: var(--red);   background: rgba(239,68,68,0.1);   color: var(--red);   }
     .sts-filter.active[data-s="SAFE"]     { border-color: var(--green); background: rgba(34,197,94,0.1);   color: var(--green); }
     .sts-filter.active[data-s="FINISHED"] { border-color: var(--muted); background: rgba(100,116,139,0.1); color: #94a3b8;      }
+    .sts-filter.active[data-s="LOGIN"]    { border-color: var(--blue);  background: rgba(59,130,246,0.1);  color: var(--blue);  }
 
     /* Roster Grid */
     #roster-grid { border-collapse: collapse; width: 100%; }
@@ -108,6 +110,7 @@
     .history-pill.SAFE   { background: rgba(34,197,94,0.12); color: var(--green); }
     .history-pill.OFFLINE { background: var(--border); color: var(--muted); }
     .history-pill.FINISHED { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .history-pill.LOGIN  { background: rgba(59,130,246,0.12); color: var(--blue); }
     tr.history-highlight { background: rgba(59,130,246,0.18) !important; outline: 1px solid var(--blue); }
   </style>
 </head>
@@ -159,6 +162,7 @@
   <div id="page-dash" class="page active">
     <div class="stat-row">
         <div class="stat-box"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">監視対象</div></div>
+        <div class="stat-box" style="color:var(--blue);"><div class="stat-val" id="stat-login">0</div><div class="stat-lbl">ログイン済み</div></div>
         <div class="stat-box" style="color:var(--red);"><div class="stat-val" id="stat-alert">0</div><div class="stat-lbl">オンライン検知中</div></div>
         <div class="stat-box" style="color:var(--muted);"><div class="stat-val" id="stat-unknown">0</div><div class="stat-lbl">名簿外</div></div>
     </div>
@@ -194,6 +198,7 @@
           <button class="sts-filter active" data-s="" onclick="setStatusFilter(null)">全て</button>
           <button class="sts-filter" data-s="ALERT"    onclick="setStatusFilter('ALERT')">ALERT</button>
           <button class="sts-filter" data-s="SAFE"     onclick="setStatusFilter('SAFE')">SAFE</button>
+          <button class="sts-filter" data-s="LOGIN"    onclick="setStatusFilter('LOGIN')">LOGIN</button>
           <button class="sts-filter" data-s="OFFLINE"  onclick="setStatusFilter('OFFLINE')">OFFLINE</button>
           <button class="sts-filter" data-s="FINISHED" onclick="setStatusFilter('FINISHED')">FINISHED</button>
         </div>
@@ -662,6 +667,7 @@
     // Stat boxes はテキスト/ステータスフィルター前の全体数を表示
     document.getElementById('stat-unknown').textContent = uk;
     document.getElementById('stat-total').textContent = allTableRows.length;
+    document.getElementById('stat-login').textContent = allTableRows.filter(r=>r.status==='LOGIN').length;
     document.getElementById('stat-alert').textContent = allTableRows.filter(r=>r.status==='ALERT').length;
 
     buildChartTabs();
@@ -683,7 +689,7 @@
     if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
 
     // ソート
-    const statusOrder = { ALERT:4, SAFE:3, OFFLINE:2, FINISHED:1 };
+    const statusOrder = { ALERT:5, SAFE:4, LOGIN:3, OFFLINE:2, FINISHED:1 };
     rows.sort((a, b) => {
       let cmp = 0;
       if (sortCol === 'count')  cmp = a.count - b.count;
