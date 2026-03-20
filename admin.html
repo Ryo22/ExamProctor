@@ -125,7 +125,7 @@
       <h2 id="roster-form-title">名簿登録・一括管理</h2>
       <!-- 共通エリア -->
       <div style="background:rgba(255,255,255,0.03); padding:1.2rem; border-radius:12px; margin-bottom:1.5rem; display:flex; gap:15px; align-items:flex-end;">
-          <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">【共通】試験名：</label><select id="roster-topic-select"></select></div>
+          <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">【共通】試験名：</label><input type="text" id="roster-topic-select" list="topic-datalist" placeholder="試験名を選択または新規入力"/><datalist id="topic-datalist"></datalist></div>
           <div style="flex:1;"><label style="font-size:0.7rem; color:var(--muted); margin-bottom:5px; display:block;">【共通】クラス：</label><input type="text" id="roster-group" placeholder="クラス名"/></div>
       </div>
       <!-- 個別エリア -->
@@ -239,10 +239,7 @@
         <div><b>${t}</b><div style="display:flex; gap:8px; margin-top:5px;"><input type="text" value="${u}" readonly style="font-size:0.65rem; width:250px;" id="u-${t}"/><button class="btn btn-ghost" onclick="const e=document.getElementById('u-${t}');e.select();document.execCommand('copy');alert('コピー完了');">コピー</button></div></div>
         <button class="btn btn-red" onclick="deleteTopic('${t}')">削除</button></div>`;
     }).join('');
-    const sel = document.getElementById('roster-topic-select');
-    const oldVal = sel.value;
-    sel.innerHTML = state.topics.sort().map(t => `<option value="${t}">${t}</option>`).join('');
-    if(oldVal && state.topics.includes(oldVal)) sel.value = oldVal;
+    document.getElementById('topic-datalist').innerHTML = state.topics.sort().map(t => `<option value="${t}">`).join('');
   }
 
   async function deleteTopic(t) {
@@ -337,6 +334,16 @@
   }
 
   // --- 名簿 ---
+  async function ensureTopic(topic_id) {
+    if (!topic_id) return false;
+    if (state.topics.includes(topic_id)) return true;
+    const { error } = await sb.from('sessions').insert({ topic_id, last_ntfy_id: '' });
+    if (error) { setStatus('✗ 試験名の作成失敗: ' + error.message, 'var(--red)'); return false; }
+    state.topics.push(topic_id); state.lastIds[topic_id] = '';
+    renderSessionManager();
+    return true;
+  }
+
   function editRoster(sid) {
     const info = state.roster[sid] || { group:'', name:'', topic:'' };
     document.getElementById('roster-group').value = info.group;
@@ -352,8 +359,9 @@
     const sid = document.getElementById('roster-sid').value.trim();
     const name = document.getElementById('roster-name').value.trim();
     const class_group = document.getElementById('roster-group').value.trim() || '---';
-    const topic_id = document.getElementById('roster-topic-select').value;
+    const topic_id = document.getElementById('roster-topic-select').value.trim();
     if (!sid || !name) return;
+    if (!await ensureTopic(topic_id)) return;
     const { error } = await sb.from('students').upsert({ sid, name, class_group, topic_id, memo: state.memos[sid] || '' });
     if (error) { setStatus('✗ 保存失敗: ' + error.message, 'var(--red)'); return; }
     state.roster[sid] = { name, group: class_group, topic: topic_id };
@@ -363,8 +371,9 @@
 
   async function saveBulkRoster() {
     const class_group = document.getElementById('roster-group').value.trim() || '---';
-    const topic_id = document.getElementById('roster-topic-select').value;
+    const topic_id = document.getElementById('roster-topic-select').value.trim();
     const lines = document.getElementById('roster-bulk-input').value.split('\n').filter(l => l);
+    if (!await ensureTopic(topic_id)) return;
     const records = [];
     lines.forEach(line => {
       const p = line.split(/[,\t\s]+/).filter(Boolean);
