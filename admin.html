@@ -250,7 +250,7 @@
     document.getElementById('topic-filter-container').innerHTML = `<div class="filter-chip filter-all ${fT===null?'active':''}" onclick="fT=null;renderDashboard()">全体表示</div>` + state.topics.map(t => `<div class="filter-chip ${fT===t?'active':''}" onclick="fT='${t}';renderDashboard()">${t}</div>`).join('');
 
     const allKeys = new Set(Object.keys(state.studentStates));
-    state.topics.forEach(t => rosterIds.forEach(id => allKeys.add(`${t}:${id}`)));
+    state.topics.forEach(t => rosterIds.forEach(id => { if (state.roster[id].topic === t) allKeys.add(`${t}:${id}`); }));
     let rows = [], uk = 0;
     allKeys.forEach(key => {
       const [t, sid] = key.split(':'), r = state.roster[sid], s = state.studentStates[key] || { topic:t, sid, status:'OFFLINE', count:0 };
