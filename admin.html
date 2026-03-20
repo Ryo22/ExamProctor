@@ -188,9 +188,19 @@
         state.memos[s.sid] = s.memo || '';
       });
 
-      state.studentStates = {};
+      // 直近8秒以内にpollUpdateがあった場合はローカル状態を優先してマージ
+      const statusSeverity = { 'OFFLINE': 0, 'SAFE': 1, 'FOCUS-LOST': 2, 'ALERT': 3 };
+      if (Date.now() - lastPollUpdate > 8000) {
+        state.studentStates = {};
+      }
       (statRes.data || []).forEach(s => {
-        state.studentStates[`${s.topic_id}:${s.sid}`] = { topic: s.topic_id, sid: s.sid, status: s.status, count: s.alert_count };
+        const key = `${s.topic_id}:${s.sid}`;
+        const local = state.studentStates[key];
+        const dbSev = statusSeverity[s.status] ?? 0;
+        const localSev = local ? (statusSeverity[local.status] ?? 0) : -1;
+        if (dbSev >= localSev) {
+          state.studentStates[key] = { topic: s.topic_id, sid: s.sid, status: s.status, count: s.alert_count };
+        }
       });
 
       renderAll();
@@ -256,6 +266,7 @@
   }
 
   // --- ntfy.sh ポーリング ---
+  let lastPollUpdate = 0;
   async function pollAll() {
     const NTFY_BASE = 'https://ntfy.sh';
     for (const t of state.topics) {
@@ -265,24 +276,36 @@
         const text = await r.text();
         const upserts = [];
         text.trim().split('\n').filter(Boolean).forEach(line => {
-          const m = JSON.parse(line);
-          if (m.event === 'message') {
-            state.lastIds[t] = m.id;
-            const p = m.message.split(':'), type = p[0], sid = p[1];
-            if (!sid) return;
-            if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic: t, sid, status: 'SAFE', count: 0 };
-            const s = state.studentStates[`${t}:${sid}`];
-            if (type === 'ALERT') { s.status = 'ALERT'; s.count++; }
-            else if (type === 'FOCUS_LOST') s.status = 'FOCUS-LOST';
-            else if (['REGISTER','FOCUS_GAINED','DISMISS'].includes(type)) s.status = 'SAFE';
-            upserts.push({ topic_id: t, sid, status: s.status, alert_count: s.count, last_seen: new Date().toISOString() });
-          }
+          try {
+            const m = JSON.parse(line);
+            if (m.event === 'message') {
+              state.lastIds[t] = m.id;
+              const p = m.message.split(':'), type = p[0], sid = p[1];
+              if (!sid) return;
+              if (!state.studentStates[`${t}:${sid}`]) state.studentStates[`${t}:${sid}`] = { topic: t, sid, status: 'SAFE', count: 0 };
+              const s = state.studentStates[`${t}:${sid}`];
+              if (type === 'ALERT') { s.status = 'ALERT'; s.count++; }
+              else if (type === 'FOCUS_LOST') s.status = 'FOCUS-LOST';
+              else if (['REGISTER','FOCUS_GAINED','DISMISS'].includes(type)) s.status = 'SAFE';
+              upserts.push({ topic_id: t, sid, status: s.status, alert_count: s.count, last_seen: new Date().toISOString() });
+            }
+          } catch(parseErr) {}
         });
         if (upserts.length > 0) {
-          await sb.from('exam_status').upsert(upserts, { onConflict: 'topic_id,sid' });
-          await sb.from('sessions').update({ last_ntfy_id: state.lastIds[t] }).eq('topic_id', t);
+          renderDashboard(); // 先にUIを更新
+          const { error } = await sb.from('exam_status').upsert(upserts, { onConflict: 'topic_id,sid' });
+          if (error) {
+            console.error('exam_status upsert error:', error);
+            setStatus('✗ 状態保存失敗: ' + error.message, 'var(--red)');
+          } else {
+            lastPollUpdate = Date.now();
+            await sb.from('sessions').update({ last_ntfy_id: state.lastIds[t] }).eq('topic_id', t);
+            setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
+          }
         }
-      } catch(e) {}
+      } catch(e) {
+        console.error('pollAll error:', e);
+      }
     }
     renderDashboard();
   }
