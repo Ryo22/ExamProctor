@@ -69,7 +69,7 @@
 
     <div id="main-screen" class="card hidden">
         <div id="state-icon">🛡️</div>
-        <div id="state-label">監視中</div>
+        <div id="state-label">確認中...</div>
         <div id="state-desc">ネットワーク接続をチェックしています...</div>
         <button id="dismiss-btn" class="btn btn-red" style="display:none;" onclick="onDismiss()">了解しました（切断済み）</button>
         <button id="end-btn" class="btn" style="background:var(--muted); margin-top:0.5rem;" onclick="onEnd()">試験を終了する</button>
@@ -85,12 +85,14 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRramZ0d2h2aHN4Z2NxYXdlbW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODk5MzUsImV4cCI6MjA4OTQ2NTkzNX0.s4lYa3NRpM3ADs5esfVa_fpaAkVj4NLk7MKzgkSKsFo';
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let TOPIC = "";
-    let SID = "";
-    let isAlert = false;
+    let TOPIC = "", SID = "";
     let monitoringActive = false;
+    let isOnline = false;       // 前回tickで判定した接続状態
+    let isChecking = false;     // tick多重実行防止
+    let firstTick = true;       // 初回tick判定（最初の接続はRECONNECTとみなさない）
     let currentStatus = 'OFFLINE';
     let alertCount = 0;
+    let lastSyncedStatus = null; // Supabaseへ送信成功した最後のステータス
 
     window.onload = function() {
         const params = new URLSearchParams(window.location.search);
@@ -100,41 +102,100 @@
         if (sidParam) document.getElementById('input-sid').value = sidParam;
     };
 
-    function sendEvent(type) {
-        if (!TOPIC || !SID) return;
-        if (type === 'ALERT') { currentStatus = 'ALERT'; alertCount++; }
-        else if (type === 'END') currentStatus = 'FINISHED';
-        else if (['REGISTER', 'DISMISS'].includes(type)) currentStatus = 'SAFE';
-        // fire-and-forget: awaitしないことで遅延ゼロ
-        (async () => {
+    // Supabaseへステータスを送信（成否を返す）
+    async function syncStatus(status, count) {
+        try {
             const { error } = await sb.from('exam_status').upsert({
                 topic_id: TOPIC, sid: SID,
-                status: currentStatus, alert_count: alertCount,
+                status: status,
+                alert_count: count ?? alertCount,
                 last_seen: new Date().toISOString()
             }, { onConflict: 'topic_id,sid' });
-            if (error) console.error('sendEvent error:', error);
-        })();
+            if (!error) { lastSyncedStatus = status; return true; }
+            console.error('syncStatus DB error:', error.message);
+            return false;
+        } catch(e) {
+            console.error('syncStatus error:', e);
+            return false;
+        }
     }
 
     function startProctoring() {
         TOPIC = document.getElementById('input-topic').value.trim();
         SID = document.getElementById('input-sid').value.trim();
-
         if (!TOPIC || !SID) {
             document.getElementById('entry-error').textContent = 'セッション名と学籍番号を入力してください。';
             return;
         }
-
         document.getElementById('entry-screen').classList.add('hidden');
         document.getElementById('main-screen').classList.remove('hidden');
         document.getElementById('meta-container').classList.remove('hidden');
         document.getElementById('meta-session').textContent = TOPIC;
         document.getElementById('meta-sid').textContent = SID;
-
         monitoringActive = true;
-        updateUI('MONITORING');
-        sendEvent('REGISTER');
-        setInterval(checkConnection, 1000);
+        updateUI('CHECKING');
+        setInterval(tick, 1000);
+    }
+
+    // メインループ: 接続確認 → 状態更新 → 同期
+    async function tick() {
+        if (isChecking) return;
+        // FINISHEDが送信完了したら終了
+        if (!monitoringActive && lastSyncedStatus === 'FINISHED') return;
+        isChecking = true;
+
+        // 1. 実際にHTTPリクエストを送って接続確認
+        let online = false;
+        try {
+            const ctrl = new AbortController();
+            setTimeout(() => ctrl.abort(), 3000);
+            await fetch('https://www.gstatic.com/generate_204', {
+                method: 'GET', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal
+            });
+            online = true;
+        } catch(e) { online = false; }
+
+        const wasOnline = isOnline;
+        isOnline = online;
+
+        // 2. 接続状態の変化に応じてステータスを決定（試験中のみ）
+        if (monitoringActive && currentStatus !== 'FINISHED') {
+            if (firstTick) {
+                // 初回: 現在の接続状態をそのまま反映
+                firstTick = false;
+                if (online) {
+                    currentStatus = 'ALERT';
+                    alertCount++;
+                    updateUI('ALERT');
+                } else {
+                    currentStatus = 'SAFE';
+                    updateUI('SAFE');
+                }
+            } else if (!wasOnline && online) {
+                // 再接続: まずSAFEを送信してオフライン期間を記録、その後ALERT
+                await syncStatus('SAFE');
+                await new Promise(r => setTimeout(r, 500));
+                currentStatus = 'ALERT';
+                alertCount++;
+                updateUI('ALERT');
+            } else if (wasOnline && !online) {
+                // 切断: SAFEへ（送信はオンライン復帰まで保留）
+                currentStatus = 'SAFE';
+                updateUI('SAFE');
+            } else if (online && currentStatus === 'SAFE') {
+                // オンラインなのにSAFE（DISMISS後など）→ 再ALERT
+                currentStatus = 'ALERT';
+                alertCount++;
+                updateUI('ALERT');
+            }
+        }
+
+        // 3. オンラインで未同期のステータスがあれば送信
+        if (online && currentStatus !== lastSyncedStatus) {
+            await syncStatus(currentStatus);
+        }
+
+        isChecking = false;
     }
 
     function updateUI(status) {
@@ -144,12 +205,19 @@
         const desc = document.getElementById('state-desc');
         const btn = document.getElementById('dismiss-btn');
 
-        if (status === 'MONITORING') {
+        if (status === 'CHECKING') {
             card.className = 'card';
-            icon.textContent = '🛡️';
-            label.textContent = '監視中';
+            icon.textContent = '🔍';
+            label.textContent = '確認中...';
+            label.style.color = 'var(--muted)';
+            desc.textContent = 'ネットワーク接続をチェックしています...';
+            btn.style.display = 'none';
+        } else if (status === 'SAFE') {
+            card.className = 'card';
+            icon.textContent = '✅';
+            label.textContent = 'オフライン確認';
             label.style.color = 'var(--green)';
-            desc.textContent = 'そのまま試験を続けてください。';
+            desc.textContent = 'ネットワーク未接続を確認しました。そのまま試験を続けてください。';
             btn.style.display = 'none';
         } else if (status === 'ALERT') {
             card.className = 'card alert-active';
@@ -169,43 +237,22 @@
         }
     }
 
-    let isChecking = false;
-    async function checkConnection() {
-        if (!monitoringActive || isChecking) return;
-        isChecking = true;
-        let online = false;
-        try {
-            const ctrl = new AbortController();
-            setTimeout(() => ctrl.abort(), 3000);
-            // no-cors: OpaqueResponseでもFetchが成功すれば接続あり
-            await fetch('https://www.gstatic.com/generate_204', {
-                method: 'GET', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal
-            });
-            online = true;
-        } catch(e) {
-            online = false;
-        }
-        isChecking = false;
-        if (online && !isAlert) {
-            isAlert = true;
-            sendEvent('ALERT');
-            updateUI('ALERT');
-        }
-    }
-
     function onDismiss() {
-        isAlert = false;
-        sendEvent('DISMISS');
-        updateUI('MONITORING');
+        // SAFEに戻す。次のtickで再接続中ならALERTに再移行する
+        currentStatus = 'SAFE';
+        updateUI('SAFE');
+        if (isOnline) {
+            (async () => { await syncStatus('SAFE'); })();
+        }
     }
 
     function onEnd() {
         if (!confirm('試験を終了しますか？\n終了後は監視が停止されます。')) return;
         monitoringActive = false;
-        sendEvent('END');
+        currentStatus = 'FINISHED';
         updateUI('ENDED');
+        // tick()がFINISHEDの送信完了まで継続して再送を試みる
     }
-
 </script>
 </body>
 </html>
