@@ -1,7 +1,19 @@
 {
   "name": "exam-proctor",
   "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.4"
+    "@supabase/supabase-js": "^2.49.4",
+    "chart.js": "^4.4.9"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5",
+    "javascript-obfuscator": "^4.1.1",
+    "rollup-plugin-obfuscator": "^1.0.1"
   }
 }
