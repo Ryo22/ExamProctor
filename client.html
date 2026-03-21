@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>接続確認システム</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -123,10 +122,6 @@
 </div>
 
 <script>
-    const SUPABASE_URL = 'https://dkjftwhvhsxgcqawemmi.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRramZ0d2h2aHN4Z2NxYXdlbW1pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODk5MzUsImV4cCI6MjA4OTQ2NTkzNX0.s4lYa3NRpM3ADs5esfVa_fpaAkVj4NLk7MKzgkSKsFo';
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
     let TOPIC = "", SID = "";
     let monitoringActive = false;
     let isOnline = false;
@@ -144,17 +139,22 @@
         if (sidParam) document.getElementById('input-sid').value = sidParam;
     };
 
-    // Supabaseへステータスを送信
+    // サーバー経由でステータスを送信（Supabase には直接アクセスしない）
     async function syncStatus(status, count) {
         try {
-            const { error } = await sb.from('exam_status').upsert({
-                topic_id: TOPIC, sid: SID,
-                status: status,
-                alert_count: count ?? alertCount,
-                last_seen: new Date().toISOString()
-            }, { onConflict: 'topic_id,sid' });
-            if (!error) { lastSyncedStatus = status; return true; }
-            console.error('syncStatus DB error:', error.message);
+            const res = await fetch('/api/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    topic_id: TOPIC,
+                    sid: SID,
+                    status,
+                    alert_count: count ?? alertCount,
+                    last_seen: new Date().toISOString()
+                })
+            });
+            if (res.ok) { lastSyncedStatus = status; return true; }
+            console.error('syncStatus API error:', res.status);
             return false;
         } catch(e) {
             console.error('syncStatus error:', e);
