@@ -584,7 +584,8 @@
 
   async function deleteTopic(t) {
     if (!confirm('削除しますか？')) return;
-    await sb.from('exam_status').update({ deleted_at: new Date().toISOString() }).eq('topic_id', t).is('deleted_at', null);
+    await sb.from('exam_status_history').delete().eq('topic_id', t);
+    await sb.from('exam_status').delete().eq('topic_id', t);
     await sb.from('students').update({ topic_id: null }).eq('topic_id', t);
     const { error } = await sb.from('sessions').delete().eq('topic_id', t);
     if (error) { setStatus('✗ 削除失敗: ' + error.message, 'var(--red)'); return; }
