@@ -351,6 +351,10 @@
             <input type="checkbox" id="del-roster" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
             <span>名簿データ <small style="color:var(--muted);">（受験生登録情報 / students）</small></span>
           </label>
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
+            <input type="checkbox" id="del-sessions" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
+            <span>試験管理データ <small style="color:var(--muted);">（完全削除 / sessions）</small></span>
+          </label>
         </div>
       </div>
 
@@ -362,8 +366,16 @@
       <button id="del-execute-btn" class="btn btn-red"
         style="display:none; margin-top:1.2rem; width:100%; padding:14px; font-size:0.95rem;"
         onclick="executeDelete()">
-        🗑️ 上記のデータをゴミ箱へ移動する
+        🗑️ 上記のデータをゴミ箱へ移動する（セッションは完全削除）
       </button>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom:1.5rem;">📥 ログデータ一括ダウンロード</h2>
+      <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;">蓄積された受験生の時系列ログ（状態履歴）をCSV形式でダウンロードします。</p>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-blue" onclick="downloadLogCSV()">📊 CSVをダウンロード</button>
+      </div>
     </div>
 
     <!-- ゴミ箱 -->
@@ -790,6 +802,26 @@
     renderAll(); setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
   }
 
+  async function downloadLogCSV() {
+    const { data, error } = await sb.from('exam_status_history').select('*').order('created_at', { ascending: false });
+    if (error) { alert('取得エラー: ' + error.message); return; }
+    if (!data || data.length === 0) { alert('ダウンロードできるログがありません。'); return; }
+    
+    let csv = '\uFEFF記録日時,セッション,学籍番号,状態,アラート回数\n';
+    data.forEach(row => {
+      const dt = new Date(row.created_at).toLocaleString();
+      csv += `"${dt}","${row.topic_id}","${row.sid}","${row.status}",${row.alert_count}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ExamProctor_Log_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function syncNow() { pullFromCloud(); }
 
   // ─────────────────────────────────────────────
@@ -819,8 +851,9 @@
     const delStatus  = document.getElementById('del-status').checked;
     const delHistory = document.getElementById('del-history').checked;
     const delRoster  = document.getElementById('del-roster').checked;
+    const delSessions = document.getElementById('del-sessions').checked;
 
-    if (!delStatus && !delHistory && !delRoster) {
+    if (!delStatus && !delHistory && !delRoster && !delSessions) {
       document.getElementById('del-preview').innerHTML = '<span style="color:var(--orange);">削除対象を1つ以上チェックしてください</span>';
       return;
     }
@@ -861,6 +894,16 @@
       const n = await countQuery('students', q => group ? q.eq('class_group', group) : q);
       parts.push(`名簿 <b>${n}件</b>`); total += n;
     }
+    if (delSessions) {
+      if (group) {
+        parts.push(`試験管理 <b>0件</b> <small>(クラス指定不可)</small>`);
+      } else {
+        const { count, error } = topic 
+          ? await sb.from('sessions').select('*', { count: 'exact', head: true }).eq('topic_id', topic) 
+          : await sb.from('sessions').select('*', { count: 'exact', head: true });
+        if (!error && count) { parts.push(`試験管理 <b>${count}件</b>`); total += count; }
+      }
+    }
 
     if (errors.length > 0) {
       previewEl.innerHTML = `<span style="color:var(--red);">エラー: ${errors.join(' / ')}</span>`;
@@ -878,12 +921,13 @@
     const delStatus  = document.getElementById('del-status').checked;
     const delHistory = document.getElementById('del-history').checked;
     const delRoster  = document.getElementById('del-roster').checked;
+    const delSessions = document.getElementById('del-sessions').checked;
 
     const desc = [
       topic ? `セッション: ${topic}` : '全セッション',
       group  ? `クラス: ${group}`    : '全クラス'
     ].join(' ／ ');
-    const targets = [delStatus&&'受験ステータス', delHistory&&'状態履歴', delRoster&&'名簿データ'].filter(Boolean).join('・');
+    const targets = [delStatus&&'受験ステータス', delHistory&&'状態履歴', delRoster&&'名簿データ', delSessions&&'試験管理(完全削除)'].filter(Boolean).join('・');
 
     if (!confirm(`【削除確認】\n\n対象: ${desc}\n削除: ${targets}\n\nこの操作は取り消せません。実行しますか？`)) return;
 
@@ -933,6 +977,32 @@
       if (!topic && !group) q = q.neq('sid', '');
       const { error } = await q;
       if (error) errors.push('名簿: ' + error.message);
+    }
+    
+    if (delSessions) {
+      if (!group) {
+        let qStatus = sb.from('exam_status').delete();
+        let qHist = sb.from('exam_status_history').delete();
+        let qSession = sb.from('sessions').delete();
+        
+        if (topic) {
+          await qHist.eq('topic_id', topic);
+          await qStatus.eq('topic_id', topic);
+          await sb.from('students').update({ topic_id: null }).eq('topic_id', topic);
+          const { error } = await qSession.eq('topic_id', topic);
+          if (error) errors.push('試験管理: ' + error.message);
+          else state.topics = state.topics.filter(x => x !== topic);
+        } else {
+          await qHist.neq('topic_id', '');
+          await qStatus.neq('topic_id', '');
+          await sb.from('students').update({ topic_id: null }).neq('topic_id', '');
+          const { error } = await qSession.neq('topic_id', '');
+          if (error) errors.push('試験管理: ' + error.message);
+          else state.topics = [];
+        }
+      } else {
+        errors.push('試験管理: クラス指定時は一括削除できません');
+      }
     }
 
     btn.disabled = false;
