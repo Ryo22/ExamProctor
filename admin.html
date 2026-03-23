@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>接続監視システム | クラウド統合ダッシュボード</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -302,6 +305,21 @@
         <button class="btn btn-ghost" onclick="openConnSettings()">⚙️ 接続設定を変更</button>
         <button class="btn btn-red" onclick="handleLogout()" style="margin-left:auto;">ログアウト</button>
       </div>
+    </div>
+
+    <div class="card" id="google-drive-card">
+      <h2 style="margin-bottom:1.2rem;">📁 Google Drive 連携</h2>
+      <div style="display:flex; flex-direction:column; gap:0.8rem; margin-bottom:1.2rem;">
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:4px;">Google Client ID <small>(OAuthクライアントID)</small></label>
+          <input type="text" id="gdrive-client-id" placeholder="YOUR_CLIENT_ID.apps.googleusercontent.com" />
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button class="btn btn-ghost" style="color:var(--text); border-color:var(--text);" id="btn-glogin" onclick="handleGoogleLogin()">G Googleアカウントで連携</button>
+        <button class="btn btn-green" id="btn-gdrive-save" onclick="saveToDrive()" style="display:none;">バックアップデータをDriveに保存</button>
+      </div>
+      <p id="gdrive-status" style="font-size:0.8rem; margin-top:1rem;"></p>
     </div>
 
     <div class="card">
