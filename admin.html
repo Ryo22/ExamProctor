@@ -182,7 +182,7 @@
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <div class="chart-tabs" id="chart-tabs"></div>
           <button class="btn btn-ghost" onclick="clearChart()" title="グラフ表示をクリア（データは削除しません）" style="font-size:0.72rem;">🗑 グラフクリア</button>
-          <button id="chart-restore-btn" class="btn btn-ghost" onclick="restoreChart()" title="クリア前のデータを再表示" style="font-size:0.72rem; color:var(--blue); border-color:var(--blue); display:none;">↩ クリアを解除</button>
+          <button id="chart-restore-btn" class="btn btn-ghost" onclick="restoreChart()" title="クリア前のデータを再表示" style="font-size:0.72rem; color:var(--blue); border-color:var(--blue); display:none;">↩ すべて復元</button>
         </div>
       </div>
       <div style="height:220px; position:relative;">
@@ -195,7 +195,11 @@
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
         <h2>受験生状況一覧</h2>
-        <span id="table-count-label" style="font-size:0.75rem; color:var(--muted);"></span>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span id="table-count-label" style="font-size:0.75rem; color:var(--muted);"></span>
+          <button id="student-clear-btn" class="btn btn-ghost" onclick="clearStudentTable()" title="一覧表示をクリア（データは削除しません）" style="font-size:0.72rem;">🗑 クリア</button>
+          <button id="student-restore-btn" class="btn btn-ghost" onclick="restoreStudentTable()" title="クリア前の表示に戻す" style="font-size:0.72rem; color:var(--blue); border-color:var(--blue); display:none;">↩ すべて復元</button>
+        </div>
       </div>
 
       <!-- 検索・ステータスフィルター -->
@@ -771,6 +775,13 @@
   }
 
   function renderStudentTable() {
+    // クリア中は空テーブルを表示
+    if (studentTableCleared) {
+      document.getElementById('student-tbody').innerHTML =
+        `<tr><td colspan="8" style="text-align:center; color:var(--muted); padding:2rem;">表示をクリアしています — 「↩ すべて復元」で元に戻せます</td></tr>`;
+      document.getElementById('table-count-label').textContent = '';
+      return;
+    }
     // テキスト・ステータスフィルター適用
     let rows = [...allTableRows];
     if (filterText.trim()) {
@@ -1400,6 +1411,21 @@
   let currentChartGroup = null;
   let chartRefreshTimer = null;
   let chartViewFrom = null; // クリア後のタイムスタンプ（これより前のイベントを非表示）
+  let studentTableCleared = false; // 受験生一覧のクリア状態
+
+  function clearStudentTable() {
+    studentTableCleared = true;
+    document.getElementById('student-clear-btn').style.display = 'none';
+    document.getElementById('student-restore-btn').style.display = 'inline-flex';
+    renderStudentTable();
+  }
+
+  function restoreStudentTable() {
+    studentTableCleared = false;
+    document.getElementById('student-restore-btn').style.display = 'none';
+    document.getElementById('student-clear-btn').style.display = 'inline-flex';
+    renderStudentTable();
+  }
 
   function clearChart() {
     chartViewFrom = Date.now();
