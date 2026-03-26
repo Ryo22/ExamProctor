@@ -182,6 +182,7 @@
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <div class="chart-tabs" id="chart-tabs"></div>
           <button class="btn btn-ghost" onclick="clearChart()" title="グラフ表示をクリア（データは削除しません）" style="font-size:0.72rem;">🗑 グラフクリア</button>
+          <button id="chart-restore-btn" class="btn btn-ghost" onclick="restoreChart()" title="クリア前のデータを再表示" style="font-size:0.72rem; color:var(--blue); border-color:var(--blue); display:none;">↩ クリアを解除</button>
         </div>
       </div>
       <div style="height:220px; position:relative;">
@@ -1404,6 +1405,13 @@
     chartViewFrom = Date.now();
     if (alertChart) { alertChart.destroy(); alertChart = null; }
     document.getElementById('chart-empty').style.display = 'flex';
+    document.getElementById('chart-restore-btn').style.display = 'inline-flex';
+  }
+
+  function restoreChart() {
+    chartViewFrom = null;
+    document.getElementById('chart-restore-btn').style.display = 'none';
+    renderAlertChart(currentChartGroup);
   }
 
   function scheduleChartRefresh() {
