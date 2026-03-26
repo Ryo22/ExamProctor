@@ -178,7 +178,10 @@
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
         <h2>📈 アラート時系列グラフ</h2>
-        <div class="chart-tabs" id="chart-tabs"></div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <div class="chart-tabs" id="chart-tabs"></div>
+          <button class="btn btn-ghost" onclick="clearChart()" title="グラフ表示をクリア（データは削除しません）" style="font-size:0.72rem;">🗑 グラフクリア</button>
+        </div>
       </div>
       <div style="height:220px; position:relative;">
         <canvas id="alert-chart"></canvas>
@@ -389,10 +392,37 @@
     </div>
 
     <div class="card">
-      <h2 style="margin-bottom:1.5rem;">📥 ログデータ一括ダウンロード</h2>
-      <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;">蓄積された受験生の時系列ログ（状態履歴）をCSV形式でダウンロードします。</p>
-      <div style="display:flex; gap:10px;">
+      <h2 style="margin-bottom:1.5rem;">📥 ログデータ ダウンロード</h2>
+      <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;">受験生の状態履歴ログをフィルターしてCSV形式でダウンロードします。</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:4px;">セッション</label>
+          <select id="log-topic"><option value="">全セッション</option></select>
+        </div>
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:4px;">クラス</label>
+          <select id="log-group"><option value="">全クラス</option></select>
+        </div>
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:4px;">開始日時</label>
+          <input type="datetime-local" id="log-from" style="font-size:0.8rem;"/>
+        </div>
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:4px;">終了日時</label>
+          <input type="datetime-local" id="log-to" style="font-size:0.8rem;"/>
+        </div>
+      </div>
+      <div style="display:flex; gap:1.2rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem;">
+        <span style="font-size:0.75rem; color:var(--muted); font-weight:bold;">状態フィルター：</span>
+        <label style="display:flex; align-items:center; gap:5px; font-size:0.8rem; cursor:pointer;"><input type="checkbox" id="log-s-alert" checked style="width:auto; accent-color:var(--red);"> ALERT</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:0.8rem; cursor:pointer;"><input type="checkbox" id="log-s-safe" checked style="width:auto; accent-color:var(--green);"> SAFE</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:0.8rem; cursor:pointer;"><input type="checkbox" id="log-s-login" checked style="width:auto; accent-color:var(--blue);"> LOGIN</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:0.8rem; cursor:pointer;"><input type="checkbox" id="log-s-offline" checked style="width:auto;"> OFFLINE</label>
+        <label style="display:flex; align-items:center; gap:5px; font-size:0.8rem; cursor:pointer;"><input type="checkbox" id="log-s-finished" checked style="width:auto;"> FINISHED</label>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
         <button class="btn btn-blue" onclick="downloadLogCSV()">📊 CSVをダウンロード</button>
+        <span id="log-count" style="font-size:0.8rem; color:var(--muted);"></span>
       </div>
     </div>
 
@@ -605,17 +635,27 @@
     const list = document.getElementById('session-manager-list');
     list.innerHTML = state.topics.sort().map(t => {
       const u = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1) + `client.html?topic=${encodeURIComponent(t)}`;
-      return `<div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+      return `<div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.8rem;">
         <div><b>${t}</b><div style="display:flex; gap:8px; margin-top:5px;"><input type="text" value="${u}" readonly style="font-size:0.65rem; width:250px;" id="u-${t}"/><button class="btn btn-ghost" onclick="const e=document.getElementById('u-${t}');e.select();document.execCommand('copy');alert('コピー完了');">コピー</button></div></div>
-        <button class="btn btn-red" onclick="deleteTopic('${t}')">削除</button></div>`;
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-ghost" style="color:var(--orange); border-color:var(--orange);" onclick="resetTopicStatus('${t}')">状態リセット</button>
+          <button class="btn btn-red" onclick="deleteTopic('${t}')">削除</button>
+        </div></div>`;
     }).join('');
     document.getElementById('topic-datalist').innerHTML = state.topics.sort().map(t => `<option value="${t}">`).join('');
   }
 
   async function deleteTopic(t) {
     if (!confirm('削除しますか？')) return;
-    await sb.from('exam_status_history').delete().eq('topic_id', t);
-    await sb.from('exam_status').delete().eq('topic_id', t);
+    const now = new Date().toISOString();
+    // Phase 1: soft-delete（RLSポリシー対応: アクティブレコードをゴミ箱へ移動）
+    await sb.from('exam_status_history').update({ deleted_at: now }).eq('topic_id', t).is('deleted_at', null);
+    await sb.from('exam_status').update({ deleted_at: now }).eq('topic_id', t).is('deleted_at', null);
+    // Phase 2: hard-delete（ゴミ箱状態のレコードを完全削除）
+    const r1 = await sb.from('exam_status_history').delete().eq('topic_id', t);
+    const r2 = await sb.from('exam_status').delete().eq('topic_id', t);
+    if (r1.error) { setStatus('✗ 削除失敗: ' + r1.error.message, 'var(--red)'); return; }
+    if (r2.error) { setStatus('✗ 削除失敗: ' + r2.error.message, 'var(--red)'); return; }
     await sb.from('students').update({ topic_id: null }).eq('topic_id', t);
     const { error } = await sb.from('sessions').delete().eq('topic_id', t);
     if (error) { setStatus('✗ 削除失敗: ' + error.message, 'var(--red)'); return; }
@@ -624,6 +664,23 @@
     Object.keys(state.studentStates).forEach(k => { if (k.startsWith(t + ':')) delete state.studentStates[k]; });
     Object.keys(state.roster).forEach(sid => { if (state.roster[sid].topic === t) state.roster[sid].topic = ''; });
     renderAll(); setStatus('● 同期済み ' + new Date().toLocaleTimeString(), 'var(--green)');
+  }
+
+  async function resetTopicStatus(t) {
+    if (!confirm(`「${t}」の全受験生の状態・アラート回数をリセットしますか？\n（ログ履歴は削除されません）`)) return;
+    const { error } = await sb.from('exam_status')
+      .update({ status: 'OFFLINE', alert_count: 0 })
+      .eq('topic_id', t)
+      .is('deleted_at', null);
+    if (error) { setStatus('✗ リセット失敗: ' + error.message, 'var(--red)'); return; }
+    Object.keys(state.studentStates).forEach(key => {
+      if (key.startsWith(t + ':')) {
+        state.studentStates[key].status = 'OFFLINE';
+        state.studentStates[key].count = 0;
+      }
+    });
+    renderDashboard();
+    setStatus('● リセット完了 ' + new Date().toLocaleTimeString(), 'var(--green)');
   }
 
   // --- Supabase Realtime ---
@@ -821,21 +878,49 @@
   }
 
   async function downloadLogCSV() {
-    const { data, error } = await sb.from('exam_status_history').select('*').order('created_at', { ascending: false });
-    if (error) { alert('取得エラー: ' + error.message); return; }
-    if (!data || data.length === 0) { alert('ダウンロードできるログがありません。'); return; }
-    
-    let csv = '\uFEFF記録日時,セッション,学籍番号,状態,アラート回数\n';
-    data.forEach(row => {
-      const dt = new Date(row.created_at).toLocaleString();
-      csv += `"${dt}","${row.topic_id}","${row.sid}","${row.status}",${row.alert_count}\n`;
+    const topic   = document.getElementById('log-topic')?.value  || '';
+    const group   = document.getElementById('log-group')?.value  || '';
+    const from    = document.getElementById('log-from')?.value   || '';
+    const to      = document.getElementById('log-to')?.value     || '';
+    const statuses = ['ALERT','SAFE','LOGIN','OFFLINE','FINISHED'].filter(s =>
+      document.getElementById('log-s-' + s.toLowerCase())?.checked
+    );
+    const countEl = document.getElementById('log-count');
+    if (countEl) countEl.textContent = '取得中...';
+
+    let q = sb.from('exam_status_history').select('*').is('deleted_at', null).order('recorded_at', { ascending: false });
+    if (topic) q = q.eq('topic_id', topic);
+    if (from)  q = q.gte('recorded_at', new Date(from).toISOString());
+    if (to)    q = q.lte('recorded_at', new Date(to).toISOString());
+    if (statuses.length > 0 && statuses.length < 5) q = q.in('status', statuses);
+
+    const { data, error } = await q;
+    if (error) { if (countEl) countEl.textContent = ''; alert('取得エラー: ' + error.message); return; }
+
+    // クラスフィルターはクライアント側で適用
+    let rows = data || [];
+    if (group) {
+      const sids = new Set(Object.entries(state.roster)
+        .filter(([, info]) => info.group === group).map(([sid]) => sid));
+      rows = rows.filter(r => sids.has(r.sid));
+    }
+
+    if (countEl) countEl.textContent = `${rows.length}件`;
+    if (rows.length === 0) { alert('ダウンロードできるログがありません。'); return; }
+
+    let csv = '\uFEFF記録日時,セッション,クラス,学籍番号,氏名,状態,アラート回数\n';
+    rows.forEach(row => {
+      const dt   = new Date(row.recorded_at).toLocaleString();
+      const info = state.roster[row.sid];
+      const cls  = info?.group || '---';
+      const name = info?.name  || '---';
+      csv += `"${dt}","${row.topic_id}","${cls}","${row.sid}","${name}","${row.status}",${row.alert_count}\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ExamProctor_Log_${new Date().toISOString().slice(0,10)}.csv`;
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `ExamProctor_Log_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -850,12 +935,22 @@
     const groupSel = document.getElementById('del-group');
     if (!topicSel || !groupSel) return;
     const curT = topicSel.value, curG = groupSel.value;
-    topicSel.innerHTML = '<option value="">全セッション</option>' +
-      state.topics.sort().map(t => `<option value="${t}" ${curT===t?'selected':''}>${t}</option>`).join('');
+    const topicOpts = '<option value="">全セッション</option>' +
+      state.topics.sort().map(t => `<option value="${t}">${t}</option>`).join('');
+    topicSel.innerHTML = topicOpts;
+    topicSel.value = curT;
     const groups = [...new Set(Object.values(state.roster).map(r => r.group).filter(Boolean))]
       .sort((a,b) => a.localeCompare(b,'ja'));
-    groupSel.innerHTML = '<option value="">全クラス</option>' +
-      groups.map(g => `<option value="${g}" ${curG===g?'selected':''}>${g}</option>`).join('');
+    const groupOpts = '<option value="">全クラス</option>' +
+      groups.map(g => `<option value="${g}">${g}</option>`).join('');
+    groupSel.innerHTML = groupOpts;
+    groupSel.value = curG;
+
+    // ログダウンロードのフィルターも同期
+    const logTopic = document.getElementById('log-topic');
+    const logGroup = document.getElementById('log-group');
+    if (logTopic) { const v = logTopic.value; logTopic.innerHTML = topicOpts; logTopic.value = v; }
+    if (logGroup) { const v = logGroup.value; logGroup.innerHTML = groupOpts; logGroup.value = v; }
   }
 
   function resetDeletePreview() {
@@ -1297,6 +1392,13 @@
   let alertChart = null;
   let currentChartGroup = null;
   let chartRefreshTimer = null;
+  let chartViewFrom = null; // クリア後のタイムスタンプ（これより前のイベントを非表示）
+
+  function clearChart() {
+    chartViewFrom = Date.now();
+    if (alertChart) { alertChart.destroy(); alertChart = null; }
+    document.getElementById('chart-empty').style.display = 'flex';
+  }
 
   function scheduleChartRefresh() {
     clearTimeout(chartRefreshTimer);
@@ -1329,7 +1431,7 @@
       return;
     }
 
-    const allEvents = data || [];
+    const allEvents = (data || []).filter(h => !chartViewFrom || new Date(h.recorded_at).getTime() >= chartViewFrom);
     const filtered = groupFilter
       ? allEvents.filter(h => state.roster[h.sid]?.group === groupFilter)
       : allEvents;
