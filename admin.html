@@ -122,7 +122,8 @@
 .period-date-box:hover { border-color:var(--blue); }
 .period-date-sub { font-size:0.6rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:2px; }
 .period-date-main { font-size:0.9rem; font-weight:700; }
-#period-edit-panel { background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.25); border-radius:12px; padding:10px 14px; display:none; align-items:center; gap:8px; flex-wrap:wrap; }
+.period-date-input { background:transparent; border:none; color:var(--text); font-size:0.9rem; font-weight:700; width:120px; text-align:center; cursor:pointer; padding:0; font-family:inherit; outline:none; }
+  .period-date-input::-webkit-calendar-picker-indicator { opacity:0.35; cursor:pointer; filter:invert(1); margin-left:2px; }
   </style>
 </head>
 <body>
@@ -186,24 +187,16 @@
     <!-- 表示期間フィルター（グラフ・受験生一覧共通） -->
     <div class="period-bar">
       <span style="font-size:0.78rem; color:var(--muted); font-weight:bold; white-space:nowrap;">📅 表示期間</span>
-      <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="togglePeriodEdit()">
+      <div style="display:flex; align-items:center; gap:8px;">
         <div class="period-date-box">
           <div class="period-date-sub">開始</div>
-          <div id="period-from-disp" class="period-date-main">—</div>
+          <input type="date" id="pp-from" class="period-date-input" onchange="applyPeriod()"/>
         </div>
         <span style="color:var(--muted); font-size:1rem; font-weight:300;">→</span>
         <div class="period-date-box">
           <div class="period-date-sub">終了</div>
-          <div id="period-to-disp" class="period-date-main">—</div>
+          <input type="date" id="pp-to" class="period-date-input" onchange="applyPeriod()"/>
         </div>
-        <span style="font-size:0.6rem; color:var(--muted);">▼ 変更</span>
-      </div>
-      <div id="period-edit-panel">
-        <input type="date" id="pp-from" style="width:auto; font-size:0.82rem;"/>
-        <span style="color:var(--muted);">〜</span>
-        <input type="date" id="pp-to" style="width:auto; font-size:0.82rem;"/>
-        <button class="btn btn-blue" onclick="applyPeriod()" style="font-size:0.72rem; padding:6px 14px;">適用</button>
-        <button class="btn btn-ghost" onclick="togglePeriodEdit()" style="font-size:0.72rem;">閉じる</button>
       </div>
       <button class="btn btn-ghost" onclick="resetPeriodToday()" style="font-size:0.72rem; margin-left:auto; color:var(--blue); border-color:var(--blue); white-space:nowrap;">今日のみ</button>
     </div>
@@ -1490,19 +1483,6 @@
     updatePeriodUI();
   }
 
-  function togglePeriodEdit() {
-    const panel = document.getElementById('period-edit-panel');
-    const showing = panel.style.display === 'flex';
-    panel.style.display = showing ? 'none' : 'flex';
-    if (!showing) {
-      document.getElementById('pp-from').value = viewFrom ? fmtDate(viewFrom).replace(/\//g,'-') : '';
-      document.getElementById('pp-to').value   = viewTo   ? fmtDate(viewTo).replace(/\//g,'-')   : '';
-      const today = new Date().toISOString().slice(0,10);
-      document.getElementById('pp-from').max = today;
-      document.getElementById('pp-to').max   = today;
-    }
-  }
-
   function applyPeriod() {
     const fromVal = document.getElementById('pp-from').value;
     const toVal   = document.getElementById('pp-to').value;
@@ -1519,7 +1499,6 @@
       studentClearedStates = JSON.parse(JSON.stringify(state.studentStates || {}));
     }
 
-    document.getElementById('period-edit-panel').style.display = 'none';
     updatePeriodUI();
     renderAlertChart(currentChartGroup);
     renderStudentTable();
@@ -1530,23 +1509,26 @@
     viewTo   = endOfDay(new Date());
     historySnapshot = null;
     studentClearedStates = JSON.parse(JSON.stringify(state.studentStates || {}));
-    document.getElementById('period-edit-panel').style.display = 'none';
     updatePeriodUI();
     renderAlertChart(currentChartGroup);
     renderStudentTable();
   }
 
   function updatePeriodUI() {
-    const fromStr = viewFrom ? fmtDate(viewFrom) : '—';
-    const toStr   = viewTo   ? fmtDate(viewTo)   : '今日';
-    document.getElementById('period-from-disp').textContent = fromStr;
-    document.getElementById('period-to-disp').textContent   = toStr;
+    const toISO = d => d ? d.toISOString().slice(0, 10) : '';
+    const today = new Date().toISOString().slice(0, 10);
+    const fromEl = document.getElementById('pp-from');
+    const toEl   = document.getElementById('pp-to');
+    if (fromEl) { fromEl.value = toISO(viewFrom); fromEl.max = today; }
+    if (toEl)   { toEl.value   = toISO(viewTo);   toEl.max   = today; }
 
     // 受験生一覧右側ラベル
     const lbl = document.getElementById('period-student-label');
     if (lbl) {
-      const today = fmtDate(startOfDay(new Date()));
-      const isDefaultToday = fromStr === today && (toStr === today || toStr === '今日');
+      const fromStr = viewFrom ? fmtDate(viewFrom) : '';
+      const toStr   = viewTo   ? fmtDate(viewTo)   : '';
+      const todayStr = fmtDate(startOfDay(new Date()));
+      const isDefaultToday = fromStr === todayStr && toStr === todayStr;
       lbl.style.display = isDefaultToday ? 'none' : 'inline';
       lbl.textContent = isDefaultToday ? '' : `${fromStr} 〜 ${toStr} のデータを表示中`;
     }
