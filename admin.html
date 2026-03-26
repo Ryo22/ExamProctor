@@ -182,7 +182,6 @@
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <div class="chart-tabs" id="chart-tabs"></div>
           <button class="btn btn-ghost" onclick="clearChart()" title="グラフ表示をクリア（データは削除しません）" style="font-size:0.72rem;">🗑 グラフクリア</button>
-          <button id="chart-restore-btn" class="btn btn-ghost" onclick="restoreChart()" title="クリア前のデータを再表示" style="font-size:0.72rem; color:var(--blue); border-color:var(--blue); display:none;">↩ すべて復元</button>
         </div>
       </div>
       <div style="height:220px; position:relative;">
@@ -193,13 +192,27 @@
 
     <!-- 受験生一覧 -->
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem; flex-wrap:wrap; gap:0.5rem;">
         <h2>受験生状況一覧</h2>
         <div style="display:flex; gap:8px; align-items:center;">
           <span id="table-count-label" style="font-size:0.75rem; color:var(--muted);"></span>
-          <button id="student-clear-btn" class="btn btn-ghost" onclick="clearStudentTable()" title="一覧表示をクリア（データは削除しません）" style="font-size:0.72rem;">🗑 クリア</button>
-          <button id="student-restore-btn" class="btn btn-ghost" onclick="restoreStudentTable()" title="クリア前の表示に戻す" style="font-size:0.72rem; color:var(--blue); border-color:var(--blue); display:none;">↩ すべて復元</button>
+          <button id="history-open-btn" class="btn btn-ghost" onclick="openHistoryPicker()" style="font-size:0.72rem;">📅 過去の記録を見る</button>
+          <button id="history-exit-btn" class="btn btn-ghost" onclick="exitHistoryMode()" style="font-size:0.72rem; color:var(--blue); border-color:var(--blue); display:none;">▶ 現在に戻る</button>
         </div>
+      </div>
+
+      <!-- 履歴バナー -->
+      <div id="history-banner" style="display:none; background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.3); border-radius:10px; padding:0.6rem 1rem; margin-bottom:0.8rem; font-size:0.8rem; color:var(--blue);">
+        📅 <span id="history-date-label"></span> の記録を表示しています
+      </div>
+
+      <!-- 日付ピッカー行 -->
+      <div id="history-picker-row" style="display:none; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; padding:0.8rem 1rem; margin-bottom:0.8rem; display:none; gap:10px; align-items:center; flex-wrap:wrap;">
+        <label style="font-size:0.75rem; color:var(--muted); white-space:nowrap;">日付を選択：</label>
+        <input type="date" id="history-date-input" style="width:auto; max-width:180px; font-size:0.85rem;"
+          max="" oninput="document.getElementById('history-apply-btn').disabled=!this.value"/>
+        <button id="history-apply-btn" class="btn btn-blue" onclick="applyHistoryDate()" disabled style="font-size:0.75rem; padding:6px 14px;">表示</button>
+        <button class="btn btn-ghost" onclick="closeHistoryPicker()" style="font-size:0.75rem;">キャンセル</button>
       </div>
 
       <!-- 検索・ステータスフィルター -->
@@ -775,11 +788,32 @@
   }
 
   function renderStudentTable() {
-    // クリア中は空テーブルを表示
-    if (studentTableCleared) {
-      document.getElementById('student-tbody').innerHTML =
-        `<tr><td colspan="8" style="text-align:center; color:var(--muted); padding:2rem;">表示をクリアしています — 「↩ すべて復元」で元に戻せます</td></tr>`;
-      document.getElementById('table-count-label').textContent = '';
+    // 過去日付モード
+    if (historySnapshot !== null) {
+      let rows = historySnapshot.map(h => {
+        const r = state.roster[h.sid];
+        return { t: h.topic_id, sid: h.sid, name: r?.name || '⚠️ 名簿未登録',
+                 group: r?.group || '---', status: h.status, count: h.alert_count, isUk: !r };
+      });
+      if (filterText.trim()) {
+        const q = filterText.trim().toLowerCase();
+        rows = rows.filter(r => r.sid.toLowerCase().includes(q) || r.name.toLowerCase().includes(q) ||
+          r.group.toLowerCase().includes(q) || r.t.toLowerCase().includes(q));
+      }
+      if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
+      document.getElementById('table-count-label').textContent = `${rows.length} 件`;
+      document.getElementById('student-tbody').innerHTML = rows.map(r => `
+        <tr class="${r.status==='ALERT'?'alert-row':''} ${r.isUk?'unknown-row':''}">
+          <td><small>${r.group}</small></td>
+          <td><b>${r.sid}</b></td>
+          <td>${r.name}</td>
+          <td>${r.t}</td>
+          <td><span class="pill ${r.status}">${r.status}</span></td>
+          <td style="text-align:center;">${r.count}</td>
+          <td><button class="btn btn-detail" onclick="showDetail('${r.t}','${r.sid}')">詳細を見る</button></td>
+          <td><span style="font-size:0.75rem; color:var(--muted);">${(state.memos[`${r.t}:${r.sid}`]||'')}</span></td>
+        </tr>`).join('') ||
+        `<tr><td colspan="8" style="text-align:center; color:var(--muted); padding:2rem;">この日のデータはありません</td></tr>`;
       return;
     }
     // テキスト・ステータスフィルター適用
@@ -1411,33 +1445,76 @@
   let currentChartGroup = null;
   let chartRefreshTimer = null;
   let chartViewFrom = null; // クリア後のタイムスタンプ（これより前のイベントを非表示）
-  let studentTableCleared = false; // 受験生一覧のクリア状態
+  let historySnapshot = null; // null=ライブ, array=過去日付表示中
 
-  function clearStudentTable() {
-    studentTableCleared = true;
-    document.getElementById('student-clear-btn').style.display = 'none';
-    document.getElementById('student-restore-btn').style.display = 'inline-flex';
-    renderStudentTable();
-  }
-
-  function restoreStudentTable() {
-    studentTableCleared = false;
-    document.getElementById('student-restore-btn').style.display = 'none';
-    document.getElementById('student-clear-btn').style.display = 'inline-flex';
-    renderStudentTable();
-  }
-
+  // ── グラフクリア（確認あり） ──
   function clearChart() {
+    if (!confirm('グラフ表示をクリアしますか？\n（元のデータは削除されません）')) return;
     chartViewFrom = Date.now();
     if (alertChart) { alertChart.destroy(); alertChart = null; }
     document.getElementById('chart-empty').style.display = 'flex';
-    document.getElementById('chart-restore-btn').style.display = 'inline-flex';
   }
 
-  function restoreChart() {
-    chartViewFrom = null;
-    document.getElementById('chart-restore-btn').style.display = 'none';
-    renderAlertChart(currentChartGroup);
+  // ── 受験生状況：過去の記録 ──
+  function openHistoryPicker() {
+    const picker = document.getElementById('history-picker-row');
+    picker.style.display = 'flex';
+    // 今日を max に設定
+    document.getElementById('history-date-input').max = new Date().toISOString().slice(0, 10);
+    document.getElementById('history-open-btn').style.display = 'none';
+  }
+
+  function closeHistoryPicker() {
+    document.getElementById('history-picker-row').style.display = 'none';
+    document.getElementById('history-open-btn').style.display = 'inline-flex';
+  }
+
+  async function applyHistoryDate() {
+    const dateStr = document.getElementById('history-date-input').value;
+    if (!dateStr) return;
+    const applyBtn = document.getElementById('history-apply-btn');
+    applyBtn.textContent = '読込中...'; applyBtn.disabled = true;
+
+    // ローカル時刻で当日の範囲を取得
+    const from = new Date(dateStr + 'T00:00:00').toISOString();
+    const to   = new Date(dateStr + 'T23:59:59.999').toISOString();
+
+    const { data, error } = await sb.from('exam_status_history')
+      .select('*')
+      .is('deleted_at', null)
+      .gte('recorded_at', from)
+      .lte('recorded_at', to)
+      .order('recorded_at', { ascending: false });
+
+    applyBtn.textContent = '表示'; applyBtn.disabled = false;
+
+    if (error) { setStatus('✗ 履歴取得失敗: ' + error.message, 'var(--red)'); return; }
+
+    // (topic_id:sid) ごとに当日最後のステータスを1件だけ残す
+    const seen = new Set();
+    historySnapshot = (data || []).filter(row => {
+      const key = `${row.topic_id}:${row.sid}`;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    });
+
+    // UI 切り替え
+    closeHistoryPicker();
+    document.getElementById('history-banner').style.display = 'block';
+    document.getElementById('history-date-label').textContent =
+      new Date(dateStr).toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' });
+    document.getElementById('history-exit-btn').style.display = 'inline-flex';
+    document.getElementById('history-open-btn').style.display = 'none';
+    renderStudentTable();
+  }
+
+  function exitHistoryMode() {
+    historySnapshot = null;
+    document.getElementById('history-banner').style.display = 'none';
+    document.getElementById('history-exit-btn').style.display = 'none';
+    document.getElementById('history-open-btn').style.display = 'inline-flex';
+    document.getElementById('history-date-input').value = '';
+    renderStudentTable();
   }
 
   function scheduleChartRefresh() {
