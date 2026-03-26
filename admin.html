@@ -115,6 +115,14 @@
     .history-pill.FINISHED { background: rgba(100,116,139,0.15); color: #94a3b8; }
     .history-pill.LOGIN  { background: rgba(59,130,246,0.12); color: var(--blue); }
     tr.history-highlight { background: rgba(59,130,246,0.18) !important; outline: 1px solid var(--blue); }
+
+/* ── 期間フィルター ── */
+.period-bar { display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:0.9rem 1.2rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+.period-date-box { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:6px 16px; text-align:center; min-width:110px; cursor:pointer; transition:border-color 0.15s; user-select:none; }
+.period-date-box:hover { border-color:var(--blue); }
+.period-date-sub { font-size:0.6rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:2px; }
+.period-date-main { font-size:0.9rem; font-weight:700; }
+#period-edit-panel { background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.25); border-radius:12px; padding:10px 14px; display:none; align-items:center; gap:8px; flex-wrap:wrap; }
   </style>
 </head>
 <body>
@@ -175,16 +183,38 @@
       <div class="filter-scroll" id="topic-filter-container"></div>
     </div>
 
+    <!-- 表示期間フィルター（グラフ・受験生一覧共通） -->
+    <div class="period-bar">
+      <span style="font-size:0.78rem; color:var(--muted); font-weight:bold; white-space:nowrap;">📅 表示期間</span>
+      <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="togglePeriodEdit()">
+        <div class="period-date-box">
+          <div class="period-date-sub">開始</div>
+          <div id="period-from-disp" class="period-date-main">—</div>
+        </div>
+        <span style="color:var(--muted); font-size:1rem; font-weight:300;">→</span>
+        <div class="period-date-box">
+          <div class="period-date-sub">終了</div>
+          <div id="period-to-disp" class="period-date-main">—</div>
+        </div>
+        <span style="font-size:0.6rem; color:var(--muted);">▼ 変更</span>
+      </div>
+      <div id="period-edit-panel">
+        <input type="date" id="pp-from" style="width:auto; font-size:0.82rem;"/>
+        <span style="color:var(--muted);">〜</span>
+        <input type="date" id="pp-to" style="width:auto; font-size:0.82rem;"/>
+        <button class="btn btn-blue" onclick="applyPeriod()" style="font-size:0.72rem; padding:6px 14px;">適用</button>
+        <button class="btn btn-ghost" onclick="togglePeriodEdit()" style="font-size:0.72rem;">閉じる</button>
+      </div>
+      <button class="btn btn-ghost" onclick="resetPeriodToday()" style="font-size:0.72rem; margin-left:auto; color:var(--blue); border-color:var(--blue); white-space:nowrap;">今日のみ</button>
+    </div>
+
     <!-- アラート時系列グラフ -->
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
         <h2>📈 アラート時系列グラフ</h2>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <div class="chart-tabs" id="chart-tabs"></div>
-          <button class="btn btn-ghost" onclick="clearChart()" title="グラフ表示をクリア（データは削除しません）" style="font-size:0.72rem;">🗑 グラフクリア</button>
-        </div>
+        <div class="chart-tabs" id="chart-tabs"></div>
       </div>
-      <div style="height:220px; position:relative;">
+      <div style="height:260px; position:relative;">
         <canvas id="alert-chart"></canvas>
         <div id="chart-empty">アラートデータがありません</div>
       </div>
@@ -194,32 +224,10 @@
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem; flex-wrap:wrap; gap:0.5rem;">
         <h2>受験生状況一覧</h2>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <span id="period-student-label" style="font-size:0.72rem; color:var(--orange); display:none;"></span>
           <span id="table-count-label" style="font-size:0.75rem; color:var(--muted);"></span>
-          <button id="history-open-btn" class="btn btn-ghost" onclick="openHistoryPicker()" style="font-size:0.72rem;">📅 過去の記録を見る</button>
-          <button id="student-clear-btn" class="btn btn-ghost" onclick="clearStudentDisplay()" style="font-size:0.72rem;">🗑 クリア</button>
-          <button id="history-exit-btn" class="btn btn-ghost" onclick="exitHistoryMode()" style="font-size:0.72rem; color:var(--blue); border-color:var(--blue); display:none;">▶ 現在に戻る</button>
         </div>
-      </div>
-
-      <!-- クリア中バナー -->
-      <div id="student-clear-banner" style="display:none; background:rgba(249,115,22,0.08); border:1px solid rgba(249,115,22,0.3); border-radius:10px; padding:0.6rem 1rem; margin-bottom:0.8rem; font-size:0.8rem; color:var(--orange); display:flex; justify-content:space-between; align-items:center;">
-        <span>🗑 <span id="student-clear-time-label"></span> 以降の変化のみ表示中</span>
-        <button class="btn btn-ghost" onclick="cancelStudentClear()" style="font-size:0.7rem; padding:4px 10px;">解除</button>
-      </div>
-
-      <!-- 履歴バナー -->
-      <div id="history-banner" style="display:none; background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.3); border-radius:10px; padding:0.6rem 1rem; margin-bottom:0.8rem; font-size:0.8rem; color:var(--blue);">
-        📅 <span id="history-date-label"></span> の記録を表示しています
-      </div>
-
-      <!-- 日付ピッカー行 -->
-      <div id="history-picker-row" style="display:none; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; padding:0.8rem 1rem; margin-bottom:0.8rem; display:none; gap:10px; align-items:center; flex-wrap:wrap;">
-        <label style="font-size:0.75rem; color:var(--muted); white-space:nowrap;">日付を選択：</label>
-        <input type="date" id="history-date-input" style="width:auto; max-width:180px; font-size:0.85rem;"
-          max="" oninput="document.getElementById('history-apply-btn').disabled=!this.value"/>
-        <button id="history-apply-btn" class="btn btn-blue" onclick="applyHistoryDate()" disabled style="font-size:0.75rem; padding:6px 14px;">表示</button>
-        <button class="btn btn-ghost" onclick="closeHistoryPicker()" style="font-size:0.75rem;">キャンセル</button>
       </div>
 
       <!-- 検索・ステータスフィルター -->
@@ -582,6 +590,7 @@
     document.querySelector('.app-viewport').classList.add('visible');
     await initCloud();
     subscribeAll();
+    initViewPeriod();
     renderAlertChart(null);
     clearGrid();
     setInterval(pullFromCloud, 30000);
@@ -862,7 +871,7 @@
     document.getElementById('student-tbody').innerHTML = rows.map(r => {
       // クリアモード: クリア後に変化したもののみ実際の状態を表示
       let ds = r.status, dc = r.count; // display status / count
-      if (studentClearedAt !== null) {
+      if (viewFrom !== null && historySnapshot === null) {
         const key = `${r.t}:${r.sid}`;
         const prev = studentClearedStates[key];
         const cur  = state.studentStates[key];
@@ -1462,96 +1471,101 @@
   let alertChart = null;
   let currentChartGroup = null;
   let chartRefreshTimer = null;
-  let chartViewFrom = null;      // グラフ：これより前のイベントを非表示
   let historySnapshot = null;    // 受験生一覧：null=ライブ, array=過去日付表示中
-  let studentClearedAt = null;   // 受験生クリア時刻（これ以降の変化のみ表示）
-  let studentClearedStates = {}; // クリア時点のstudentStates スナップショット
+  let viewFrom = null;           // 表示期間 開始（Date）
+  let viewTo   = null;           // 表示期間 終了（Date | null=live）
+  let studentClearedStates = {}; // viewFrom 設定時のstudentStatesスナップショット
 
-  // ── 受験生一覧クリア ──
-  function clearStudentDisplay() {
-    if (!confirm('受験生の状態・回数表示をクリアしますか？\n（クリア後に届いた変化のみ表示されます。データは削除されません）')) return;
-    studentClearedAt = Date.now();
-    studentClearedStates = JSON.parse(JSON.stringify(state.studentStates));
-    const timeLabel = new Date(studentClearedAt).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-    document.getElementById('student-clear-time-label').textContent = timeLabel;
-    document.getElementById('student-clear-banner').style.display = 'flex';
+  function startOfDay(d) { const r = new Date(d); r.setHours(0,0,0,0); return r; }
+  function endOfDay(d)   { const r = new Date(d); r.setHours(23,59,59,999); return r; }
+  function fmtDate(d) {
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  // ── 表示期間フィルター ──
+  function initViewPeriod() {
+    viewFrom = startOfDay(new Date());
+    viewTo   = endOfDay(new Date());
+    studentClearedStates = JSON.parse(JSON.stringify(state.studentStates || {}));
+    updatePeriodUI();
+  }
+
+  function togglePeriodEdit() {
+    const panel = document.getElementById('period-edit-panel');
+    const showing = panel.style.display === 'flex';
+    panel.style.display = showing ? 'none' : 'flex';
+    if (!showing) {
+      document.getElementById('pp-from').value = viewFrom ? fmtDate(viewFrom).replace(/\//g,'-') : '';
+      document.getElementById('pp-to').value   = viewTo   ? fmtDate(viewTo).replace(/\//g,'-')   : '';
+      const today = new Date().toISOString().slice(0,10);
+      document.getElementById('pp-from').max = today;
+      document.getElementById('pp-to').max   = today;
+    }
+  }
+
+  function applyPeriod() {
+    const fromVal = document.getElementById('pp-from').value;
+    const toVal   = document.getElementById('pp-to').value;
+    if (!fromVal) return;
+    viewFrom = startOfDay(new Date(fromVal));
+    viewTo   = toVal ? endOfDay(new Date(toVal)) : endOfDay(new Date());
+
+    // 過去日付の場合はhistorySnapshot（最終日の状態）をロード
+    const todayStart = startOfDay(new Date());
+    if (viewTo < todayStart) {
+      loadHistorySnapshot(toVal);
+    } else {
+      historySnapshot = null;
+      studentClearedStates = JSON.parse(JSON.stringify(state.studentStates || {}));
+    }
+
+    document.getElementById('period-edit-panel').style.display = 'none';
+    updatePeriodUI();
+    renderAlertChart(currentChartGroup);
     renderStudentTable();
   }
 
-  function cancelStudentClear() {
-    studentClearedAt = null;
-    studentClearedStates = {};
-    document.getElementById('student-clear-banner').style.display = 'none';
+  function resetPeriodToday() {
+    viewFrom = startOfDay(new Date());
+    viewTo   = endOfDay(new Date());
+    historySnapshot = null;
+    studentClearedStates = JSON.parse(JSON.stringify(state.studentStates || {}));
+    document.getElementById('period-edit-panel').style.display = 'none';
+    updatePeriodUI();
+    renderAlertChart(currentChartGroup);
     renderStudentTable();
   }
 
-  // ── グラフクリア（確認あり） ──
-  function clearChart() {
-    if (!confirm('グラフ表示をクリアしますか？\n（元のデータは削除されません）')) return;
-    chartViewFrom = Date.now();
-    if (alertChart) { alertChart.destroy(); alertChart = null; }
-    document.getElementById('chart-empty').style.display = 'flex';
+  function updatePeriodUI() {
+    const fromStr = viewFrom ? fmtDate(viewFrom) : '—';
+    const toStr   = viewTo   ? fmtDate(viewTo)   : '今日';
+    document.getElementById('period-from-disp').textContent = fromStr;
+    document.getElementById('period-to-disp').textContent   = toStr;
+
+    // 受験生一覧右側ラベル
+    const lbl = document.getElementById('period-student-label');
+    if (lbl) {
+      const today = fmtDate(startOfDay(new Date()));
+      const isDefaultToday = fromStr === today && (toStr === today || toStr === '今日');
+      lbl.style.display = isDefaultToday ? 'none' : 'inline';
+      lbl.textContent = isDefaultToday ? '' : `${fromStr} 〜 ${toStr} のデータを表示中`;
+    }
   }
 
-  // ── 受験生状況：過去の記録 ──
-  function openHistoryPicker() {
-    const picker = document.getElementById('history-picker-row');
-    picker.style.display = 'flex';
-    // 今日を max に設定
-    document.getElementById('history-date-input').max = new Date().toISOString().slice(0, 10);
-    document.getElementById('history-open-btn').style.display = 'none';
-  }
-
-  function closeHistoryPicker() {
-    document.getElementById('history-picker-row').style.display = 'none';
-    document.getElementById('history-open-btn').style.display = 'inline-flex';
-  }
-
-  async function applyHistoryDate() {
-    const dateStr = document.getElementById('history-date-input').value;
-    if (!dateStr) return;
-    const applyBtn = document.getElementById('history-apply-btn');
-    applyBtn.textContent = '読込中...'; applyBtn.disabled = true;
-
-    // ローカル時刻で当日の範囲を取得
+  async function loadHistorySnapshot(dateStr) {
     const from = new Date(dateStr + 'T00:00:00').toISOString();
     const to   = new Date(dateStr + 'T23:59:59.999').toISOString();
-
     const { data, error } = await sb.from('exam_status_history')
-      .select('*')
-      .is('deleted_at', null)
-      .gte('recorded_at', from)
-      .lte('recorded_at', to)
+      .select('*').is('deleted_at', null)
+      .gte('recorded_at', from).lte('recorded_at', to)
       .order('recorded_at', { ascending: false });
-
-    applyBtn.textContent = '表示'; applyBtn.disabled = false;
-
     if (error) { setStatus('✗ 履歴取得失敗: ' + error.message, 'var(--red)'); return; }
-
-    // (topic_id:sid) ごとに当日最後のステータスを1件だけ残す
     const seen = new Set();
     historySnapshot = (data || []).filter(row => {
       const key = `${row.topic_id}:${row.sid}`;
       if (seen.has(key)) return false;
       seen.add(key); return true;
     });
-
-    // UI 切り替え
-    closeHistoryPicker();
-    document.getElementById('history-banner').style.display = 'block';
-    document.getElementById('history-date-label').textContent =
-      new Date(dateStr).toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' });
-    document.getElementById('history-exit-btn').style.display = 'inline-flex';
-    document.getElementById('history-open-btn').style.display = 'none';
-    renderStudentTable();
-  }
-
-  function exitHistoryMode() {
-    historySnapshot = null;
-    document.getElementById('history-banner').style.display = 'none';
-    document.getElementById('history-exit-btn').style.display = 'none';
-    document.getElementById('history-open-btn').style.display = 'inline-flex';
-    document.getElementById('history-date-input').value = '';
     renderStudentTable();
   }
 
@@ -1586,7 +1600,12 @@
       return;
     }
 
-    const allEvents = (data || []).filter(h => !chartViewFrom || new Date(h.recorded_at).getTime() >= chartViewFrom);
+    const allEvents = (data || []).filter(h => {
+      const ts = new Date(h.recorded_at).getTime();
+      if (viewFrom && ts < viewFrom.getTime()) return false;
+      if (viewTo   && ts > viewTo.getTime())   return false;
+      return true;
+    });
     const filtered = groupFilter
       ? allEvents.filter(h => state.roster[h.sid]?.group === groupFilter)
       : allEvents;
@@ -1706,13 +1725,19 @@
           x: {
             type: 'linear',
             grid: { color: '#2a2d3a' },
-            ticks: { color: '#64748b', font: { size: 11 }, maxTicksLimit: 10, callback: val => fmtTime(val) }
+            ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 8,
+              callback: val => {
+                const d = new Date(val);
+                const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+                return [dateStr, fmtTime(val)];
+              }
+            }
           },
           y: {
             grid: { color: '#2a2d3a' },
             ticks: { color: '#64748b', font: { size: 11 },
               callback: v => v === 0 ? '0' : v === 1 ? 'ALERT' : '' },
-            beginAtZero: true, max: 1.6,
+            beginAtZero: true, max: 1.8,
             title: { display: true, text: 'アラート発生', color: '#64748b', font: { size: 11 } }
           }
         },
@@ -1762,10 +1787,9 @@
     let detailQ = sb.from('exam_status_history').select('*')
       .eq('topic_id', topic).eq('sid', sid).is('deleted_at', null)
       .order('recorded_at', { ascending: false });
-    // クリアモード：クリア以降のログのみ表示
-    if (studentClearedAt !== null) {
-      detailQ = detailQ.gte('recorded_at', new Date(studentClearedAt).toISOString());
-    }
+    // 期間フィルター
+    if (viewFrom) detailQ = detailQ.gte('recorded_at', viewFrom.toISOString());
+    if (viewTo)   detailQ = detailQ.lte('recorded_at', viewTo.toISOString());
     const { data, error } = await detailQ;
 
     if (error) {
