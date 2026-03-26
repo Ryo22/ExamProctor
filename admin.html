@@ -152,7 +152,8 @@
             <div class="nav-tab active" data-tab="page-dash">ダッシュボード</div>
             <div class="nav-tab" data-tab="page-sessions">試験管理</div>
             <div class="nav-tab" data-tab="page-roster">名簿マスタ</div>
-            <div class="nav-tab" data-tab="page-cloud">設定</div>
+            <div class="nav-tab" data-tab="page-data">データ管理</div>
+            <div class="nav-tab" data-tab="page-cloud">システム設定</div>
         </div>
     </div>
     <div style="display:flex; align-items:center; gap:12px;">
@@ -341,56 +342,12 @@
       </div>
     </div>
 
-    <div class="card">
-      <h2 style="margin-bottom:1.5rem;">🗑️ データ一括削除</h2>
+  </div>
 
-      <!-- フィルター -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
-        <div>
-          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:6px;">セッション</label>
-          <select id="del-topic" onchange="resetDeletePreview()"><option value="">全セッション</option></select>
-        </div>
-        <div>
-          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:6px;">クラス</label>
-          <select id="del-group" onchange="resetDeletePreview()"><option value="">全クラス</option></select>
-        </div>
-      </div>
+  <!-- ─── データ管理ページ ─── -->
+  <div id="page-data" class="page">
 
-      <!-- 削除対象チェックボックス -->
-      <div style="margin-bottom:1.5rem;">
-        <p style="font-size:0.75rem; color:var(--muted); margin-bottom:0.8rem; font-weight:bold;">削除するデータ：</p>
-        <div style="display:flex; flex-direction:column; gap:0.7rem;">
-          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
-            <input type="checkbox" id="del-status" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
-            <span>受験ステータス <small style="color:var(--muted);">（現在の状態 / exam_status）</small></span>
-          </label>
-          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
-            <input type="checkbox" id="del-history" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
-            <span>状態履歴 <small style="color:var(--muted);">（時系列ログ / exam_status_history）</small></span>
-          </label>
-          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
-            <input type="checkbox" id="del-roster" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
-            <span>名簿データ <small style="color:var(--muted);">（受験生登録情報 / students）</small></span>
-          </label>
-          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
-            <input type="checkbox" id="del-sessions" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
-            <span>試験管理データ <small style="color:var(--muted);">（完全削除 / sessions）</small></span>
-          </label>
-        </div>
-      </div>
-
-      <!-- プレビュー & 実行 -->
-      <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
-        <button class="btn btn-ghost" onclick="previewDelete()">🔍 対象件数を確認</button>
-        <span id="del-preview" style="font-size:0.85rem; color:var(--muted);"></span>
-      </div>
-      <button id="del-execute-btn" class="btn btn-red"
-        style="display:none; margin-top:1.2rem; width:100%; padding:14px; font-size:0.95rem;"
-        onclick="executeDelete()">
-        🗑️ 上記のデータをゴミ箱へ移動する（セッションは完全削除）
-      </button>
-    </div>
-
+    <!-- 1. ログデータダウンロード -->
     <div class="card">
       <h2 style="margin-bottom:1.5rem;">📥 ログデータ ダウンロード</h2>
       <p style="font-size:0.8rem; color:var(--muted); margin-bottom:1rem;">受験生の状態履歴ログをフィルターしてCSV形式でダウンロードします。</p>
@@ -426,7 +383,55 @@
       </div>
     </div>
 
-    <!-- ゴミ箱 -->
+    <!-- 2. データ削除 -->
+    <div class="card">
+      <h2 style="margin-bottom:1.5rem;">🗑️ データ削除</h2>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:6px;">セッション</label>
+          <select id="del-topic" onchange="resetDeletePreview()"><option value="">全セッション</option></select>
+        </div>
+        <div>
+          <label style="font-size:0.7rem; color:var(--muted); display:block; margin-bottom:6px;">クラス</label>
+          <select id="del-group" onchange="resetDeletePreview()"><option value="">全クラス</option></select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:1.5rem;">
+        <p style="font-size:0.75rem; color:var(--muted); margin-bottom:0.8rem; font-weight:bold;">削除するデータ：</p>
+        <div style="display:flex; flex-direction:column; gap:0.7rem;">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
+            <input type="checkbox" id="del-status" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
+            <span>受験ステータス <small style="color:var(--muted);">（現在の状態 / exam_status）</small></span>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
+            <input type="checkbox" id="del-history" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
+            <span>状態履歴 <small style="color:var(--muted);">（時系列ログ / exam_status_history）</small></span>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
+            <input type="checkbox" id="del-roster" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
+            <span>名簿データ <small style="color:var(--muted);">（受験生登録情報 / students）</small></span>
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.85rem;">
+            <input type="checkbox" id="del-sessions" onchange="resetDeletePreview()" style="width:auto; accent-color:var(--red);">
+            <span>試験管理データ <small style="color:var(--muted);">（完全削除 / sessions）</small></span>
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+        <button class="btn btn-ghost" onclick="previewDelete()">🔍 対象件数を確認</button>
+        <span id="del-preview" style="font-size:0.85rem; color:var(--muted);"></span>
+      </div>
+      <button id="del-execute-btn" class="btn btn-red"
+        style="display:none; margin-top:1.2rem; width:100%; padding:14px; font-size:0.95rem;"
+        onclick="executeDelete()">
+        🗑️ 上記のデータをゴミ箱へ移動する（セッションは完全削除）
+      </button>
+    </div>
+
+    <!-- 3. ゴミ箱 -->
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
         <h2>♻️ ゴミ箱（削除済みデータ）</h2>
@@ -442,6 +447,7 @@
       </div>
     </div>
   </div>
+
 </main>
 
 <!-- 詳細モーダル -->
@@ -928,7 +934,7 @@
   function syncNow() { pullFromCloud(); }
 
   // ─────────────────────────────────────────────
-  // データ一括削除
+  // データ削除（データ管理タブ）
   // ─────────────────────────────────────────────
   function renderDataManagement() {
     const topicSel = document.getElementById('del-topic');
