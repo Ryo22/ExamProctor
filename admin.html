@@ -197,8 +197,15 @@
         <div style="display:flex; gap:8px; align-items:center;">
           <span id="table-count-label" style="font-size:0.75rem; color:var(--muted);"></span>
           <button id="history-open-btn" class="btn btn-ghost" onclick="openHistoryPicker()" style="font-size:0.72rem;">📅 過去の記録を見る</button>
+          <button id="student-clear-btn" class="btn btn-ghost" onclick="clearStudentDisplay()" style="font-size:0.72rem;">🗑 クリア</button>
           <button id="history-exit-btn" class="btn btn-ghost" onclick="exitHistoryMode()" style="font-size:0.72rem; color:var(--blue); border-color:var(--blue); display:none;">▶ 現在に戻る</button>
         </div>
+      </div>
+
+      <!-- クリア中バナー -->
+      <div id="student-clear-banner" style="display:none; background:rgba(249,115,22,0.08); border:1px solid rgba(249,115,22,0.3); border-radius:10px; padding:0.6rem 1rem; margin-bottom:0.8rem; font-size:0.8rem; color:var(--orange); display:flex; justify-content:space-between; align-items:center;">
+        <span>🗑 <span id="student-clear-time-label"></span> 以降の変化のみ表示中</span>
+        <button class="btn btn-ghost" onclick="cancelStudentClear()" style="font-size:0.7rem; padding:4px 10px;">解除</button>
       </div>
 
       <!-- 履歴バナー -->
@@ -852,21 +859,32 @@
       isFiltered ? `${rows.length} / ${allTableRows.length} 件` : `${rows.length} 件`;
 
     // tbody描画
-    document.getElementById('student-tbody').innerHTML = rows.map(r => `
-      <tr class="${r.status==='ALERT'?'alert-row':''} ${r.isUk?'unknown-row':''}">
+    document.getElementById('student-tbody').innerHTML = rows.map(r => {
+      // クリアモード: クリア後に変化したもののみ実際の状態を表示
+      let ds = r.status, dc = r.count; // display status / count
+      if (studentClearedAt !== null) {
+        const key = `${r.t}:${r.sid}`;
+        const prev = studentClearedStates[key];
+        const cur  = state.studentStates[key];
+        const changed = cur && (!prev || prev.status !== cur.status || prev.count !== cur.count);
+        if (!changed) { ds = 'OFFLINE'; dc = 0; }
+      }
+      return `
+      <tr class="${ds==='ALERT'?'alert-row':''} ${r.isUk?'unknown-row':''}">
         <td><small>${r.group}</small></td>
         <td><b>${r.sid}</b></td>
         <td>${r.name}</td>
         <td>${r.t}</td>
-        <td><span class="pill ${r.status}">${r.status}</span></td>
-        <td style="text-align:center;">${r.count}</td>
+        <td><span class="pill ${ds}">${ds}</span></td>
+        <td style="text-align:center;">${dc}</td>
         <td style="display:flex; gap:5px; flex-wrap:wrap;">
           <button class="btn btn-detail" onclick="showDetail('${r.t}','${r.sid}')">詳細を見る</button>
           <button class="btn btn-ghost" onclick="dismissAlert('${r.t}','${r.sid}')">解除</button>
           <button class="btn btn-ghost" style="color:var(--blue); border-color:var(--blue);" onclick="editRoster('${r.sid}')">編集</button>
         </td>
         <td><input type="text" class="memo-input" value="${(state.memos[`${r.t}:${r.sid}`]||'').replace(/"/g,'&quot;')}" onblur="updateMemo('${r.t}','${r.sid}', this.value)" placeholder="メモ..."/></td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   }
 
   async function updateMemo(topic, sid, v) {
@@ -1444,8 +1462,28 @@
   let alertChart = null;
   let currentChartGroup = null;
   let chartRefreshTimer = null;
-  let chartViewFrom = null; // クリア後のタイムスタンプ（これより前のイベントを非表示）
-  let historySnapshot = null; // null=ライブ, array=過去日付表示中
+  let chartViewFrom = null;      // グラフ：これより前のイベントを非表示
+  let historySnapshot = null;    // 受験生一覧：null=ライブ, array=過去日付表示中
+  let studentClearedAt = null;   // 受験生クリア時刻（これ以降の変化のみ表示）
+  let studentClearedStates = {}; // クリア時点のstudentStates スナップショット
+
+  // ── 受験生一覧クリア ──
+  function clearStudentDisplay() {
+    if (!confirm('受験生の状態・回数表示をクリアしますか？\n（クリア後に届いた変化のみ表示されます。データは削除されません）')) return;
+    studentClearedAt = Date.now();
+    studentClearedStates = JSON.parse(JSON.stringify(state.studentStates));
+    const timeLabel = new Date(studentClearedAt).toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    document.getElementById('student-clear-time-label').textContent = timeLabel;
+    document.getElementById('student-clear-banner').style.display = 'flex';
+    renderStudentTable();
+  }
+
+  function cancelStudentClear() {
+    studentClearedAt = null;
+    studentClearedStates = {};
+    document.getElementById('student-clear-banner').style.display = 'none';
+    renderStudentTable();
+  }
 
   // ── グラフクリア（確認あり） ──
   function clearChart() {
@@ -1721,13 +1759,14 @@
       <p style="color:var(--muted); font-size:0.85rem;">読み込み中...</p>`;
     document.getElementById('detail-modal').classList.add('show');
 
-    const { data, error } = await sb
-      .from('exam_status_history')
-      .select('*')
-      .eq('topic_id', topic)
-      .eq('sid', sid)
-      .is('deleted_at', null)
+    let detailQ = sb.from('exam_status_history').select('*')
+      .eq('topic_id', topic).eq('sid', sid).is('deleted_at', null)
       .order('recorded_at', { ascending: false });
+    // クリアモード：クリア以降のログのみ表示
+    if (studentClearedAt !== null) {
+      detailQ = detailQ.gte('recorded_at', new Date(studentClearedAt).toISOString());
+    }
+    const { data, error } = await detailQ;
 
     if (error) {
       document.getElementById('detail-modal-content').innerHTML += `
