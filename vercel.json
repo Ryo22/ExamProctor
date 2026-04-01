@@ -2,5 +2,8 @@
   "version": 2,
   "redirects": [
     { "source": "/", "destination": "/admin.html", "permanent": false }
+  ],
+  "rewrites": [
+    { "source": "/exam/:topic", "destination": "/client.html?topic=:topic" }
   ]
 }
