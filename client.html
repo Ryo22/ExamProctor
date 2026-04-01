@@ -137,9 +137,16 @@
     let lastSyncedStatus = null;
 
     window.onload = function() {
+        let topicParam = null;
+        const pathParts = window.location.pathname.split('/');
+        if (pathParts.length >= 3 && pathParts[1] === 'exam') {
+            topicParam = decodeURIComponent(pathParts[2]);
+        }
+        
         const params = new URLSearchParams(window.location.search);
-        const topicParam = params.get('topic');
+        if (!topicParam) topicParam = params.get('topic');
         const sidParam = params.get('sid');
+        
         if (topicParam) document.getElementById('input-topic').value = topicParam;
         if (sidParam) document.getElementById('input-sid').value = sidParam;
     };
